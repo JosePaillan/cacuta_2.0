@@ -1,0 +1,447 @@
+{% extends 'productos/base.html' %}
+
+{% block content %}
+<div class="container">
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">Agregar al Carrito</h5>
+                </div>
+                <div class="card-body">
+                    <form id="agregarAlCarritoForm">
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="sucursalSelect" class="form-label">Sucursal</label>
+                                <select id="sucursalSelect" class="form-select" required>
+                                    <option value="">Seleccione una sucursal</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="productoSelect" class="form-label">Producto</label>
+                                <select id="productoSelect" class="form-select" required disabled>
+                                    <option value="">Seleccione un producto</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="cantidadInput" class="form-label">Cantidad</label>
+                                <input type="number" class="form-control" id="cantidadInput" min="1" value="1" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Stock Disponible</label>
+                                <p id="stockDisponible" class="form-control-plaintext">-</p>
+                            </div>
+                        </div>
+                        <div class="text-end">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-cart-plus me-1"></i>Agregar al Carrito
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card shadow-sm">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0">Resumen del Carrito</h5>
+                </div>
+                <div class="card-body">
+                    <div id="carritoVacio" class="text-center py-3">
+                        <i class="fas fa-shopping-cart fa-3x text-muted mb-3"></i>
+                        <p class="text-muted">Tu carrito está vacío</p>
+                    </div>
+                    <div id="carritoItems" style="display: none;">
+                        <div class="list-group list-group-flush mb-3" id="itemsCarrito">
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h5 class="mb-0">Total:</h5>
+                            <h5 class="mb-0" id="totalCarrito">$0</h5>
+                        </div>
+                        <button class="btn btn-success w-100" id="btnPagar">
+                            <i class="fas fa-credit-card me-1"></i>Pagar con Webpay
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Template para items del carrito -->
+<template id="itemCarritoTemplate">
+    <div class="list-group-item">
+        <div class="d-flex w-100 justify-content-between align-items-center">
+            <div>
+                <h6 class="mb-1 producto-nombre"></h6>
+                <small class="text-muted sucursal-nombre"></small>
+            </div>
+            <div class="text-end">
+                <div class="mb-1 precio-total"></div>
+                <div class="btn-group btn-group-sm">
+                    <button class="btn btn-outline-danger btn-eliminar">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                    <input type="number" class="form-control form-control-sm cantidad-input" style="width: 60px" min="1">
+                </div>
+            </div>
+        </div>
+    </div>
+</template>
+
+<!-- Modal de Procesando Pago -->
+<div class="modal fade" id="procesandoPagoModal" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-body text-center p-4">
+                <div class="spinner-border text-primary mb-3" role="status">
+                    <span class="visually-hidden">Procesando...</span>
+                </div>
+                <h5>Procesando Pago</h5>
+                <p>Por favor espere mientras se procesa su pago...</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let carritoId = null;
+let productosSucursal = {};
+
+async function inicializarCarrito() {
+    try {
+        const response = await fetch('/api/carritos/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            }
+        });
+        const data = await response.json();
+        carritoId = data.id;
+        actualizarCarrito(data);
+    } catch (error) {
+        console.error('Error al crear carrito:', error);
+        showNotification('Error al inicializar el carrito', 'danger');
+    }
+}
+
+async function cargarSucursales() {
+    try {
+        const response = await fetch('/api/sucursales/');
+        const data = await response.json();
+        
+        const sucursalSelect = document.getElementById('sucursalSelect');
+        sucursalSelect.innerHTML = '<option value="">Seleccione una sucursal</option>';
+        
+        data.forEach(sucursal => {
+            const option = document.createElement('option');
+            option.value = sucursal.id;
+            option.textContent = sucursal.nombre;
+            sucursalSelect.appendChild(option);
+        });
+    } catch (error) {
+        console.error('Error al cargar sucursales:', error);
+        showNotification('Error al cargar las sucursales', 'danger');
+    }
+}
+
+async function cargarProductosSucursal(sucursalId) {
+    try {
+        const response = await fetch('/api/productos/');
+        const data = await response.json();
+        
+        const productoSelect = document.getElementById('productoSelect');
+        productoSelect.innerHTML = '<option value="">Seleccione un producto</option>';
+        productoSelect.disabled = false;
+        
+        data.forEach(producto => {
+            const productoSucursal = producto.sucursales.find(s => s.sucursal == sucursalId);
+            if (productoSucursal && productoSucursal.stock > 0) {
+                const option = document.createElement('option');
+                option.value = productoSucursal.id;
+                option.textContent = `${producto.nombre} - $${productoSucursal.precio.toLocaleString()}`;
+                productoSelect.appendChild(option);
+                productosSucursal[productoSucursal.id] = productoSucursal;
+            }
+        });
+    } catch (error) {
+        console.error('Error al cargar productos:', error);
+        showNotification('Error al cargar los productos', 'danger');
+    }
+}
+
+function actualizarStockDisponible() {
+    const productoSucursalId = document.getElementById('productoSelect').value;
+    const stockDisponible = document.getElementById('stockDisponible');
+    const cantidadInput = document.getElementById('cantidadInput');
+    
+    if (productoSucursalId && productosSucursal[productoSucursalId]) {
+        const stock = productosSucursal[productoSucursalId].stock;
+        stockDisponible.textContent = stock;
+        cantidadInput.max = stock;
+    } else {
+        stockDisponible.textContent = '-';
+        cantidadInput.max = '';
+    }
+}
+
+async function agregarAlCarrito(event) {
+    event.preventDefault();
+    
+    const productoSucursalId = document.getElementById('productoSelect').value;
+    const cantidad = parseInt(document.getElementById('cantidadInput').value);
+    
+    if (!productoSucursalId || !cantidad) {
+        showNotification('Por favor complete todos los campos', 'warning');
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/carritos/${carritoId}/agregar_item/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({
+                producto_sucursal: productoSucursalId,
+                cantidad: cantidad
+            })
+        });
+        
+        const data = await response.json();
+        if (response.ok) {
+            actualizarCarrito(data);
+            showNotification('Producto agregado al carrito', 'success');
+            document.getElementById('agregarAlCarritoForm').reset();
+            document.getElementById('productoSelect').disabled = true;
+            document.getElementById('stockDisponible').textContent = '-';
+        } else {
+            showNotification(data.error || 'Error al agregar al carrito', 'danger');
+        }
+    } catch (error) {
+        console.error('Error al agregar al carrito:', error);
+        showNotification('Error al agregar al carrito', 'danger');
+    }
+}
+
+function actualizarCarrito(data) {
+    const carritoVacio = document.getElementById('carritoVacio');
+    const carritoItems = document.getElementById('carritoItems');
+    const itemsContainer = document.getElementById('itemsCarrito');
+    const totalCarrito = document.getElementById('totalCarrito');
+    
+    if (data.items.length === 0) {
+        carritoVacio.style.display = 'block';
+        carritoItems.style.display = 'none';
+    } else {
+        carritoVacio.style.display = 'none';
+        carritoItems.style.display = 'block';
+        
+        itemsContainer.innerHTML = '';
+        const template = document.getElementById('itemCarritoTemplate');
+        
+        data.items.forEach(item => {
+            const itemElement = template.content.cloneNode(true);
+            
+            itemElement.querySelector('.producto-nombre').textContent = item.producto_nombre;
+            itemElement.querySelector('.sucursal-nombre').textContent = item.sucursal_nombre;
+            itemElement.querySelector('.precio-total').textContent = 
+                `$${item.subtotal.toLocaleString()} (${item.cantidad} x $${item.precio_unitario.toLocaleString()})`;
+            
+            const cantidadInput = itemElement.querySelector('.cantidad-input');
+            cantidadInput.value = item.cantidad;
+            cantidadInput.dataset.itemId = item.id;
+            
+            const btnEliminar = itemElement.querySelector('.btn-eliminar');
+            btnEliminar.dataset.itemId = item.id;
+            
+            itemsContainer.appendChild(itemElement);
+        });
+        
+        totalCarrito.textContent = `$${data.total.toLocaleString()}`;
+    }
+}
+
+async function actualizarCantidadItem(itemId, cantidad) {
+    try {
+        const response = await fetch(`/api/carritos/${carritoId}/actualizar_item/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({
+                item_id: itemId,
+                cantidad: cantidad
+            })
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            actualizarCarrito(data);
+        } else {
+            const data = await response.json();
+            showNotification(data.error || 'Error al actualizar cantidad', 'danger');
+        }
+    } catch (error) {
+        console.error('Error al actualizar cantidad:', error);
+        showNotification('Error al actualizar cantidad', 'danger');
+    }
+}
+
+async function eliminarItem(itemId) {
+    try {
+        const response = await fetch(`/api/carritos/${carritoId}/eliminar_item/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({
+                item_id: itemId
+            })
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            actualizarCarrito(data);
+            showNotification('Producto eliminado del carrito', 'success');
+        } else {
+            const data = await response.json();
+            showNotification(data.error || 'Error al eliminar producto', 'danger');
+        }
+    } catch (error) {
+        console.error('Error al eliminar producto:', error);
+        showNotification('Error al eliminar producto', 'danger');
+    }
+}
+
+async function iniciarPago() {
+    const modal = new bootstrap.Modal(document.getElementById('procesandoPagoModal'));
+    modal.show();
+
+    try {
+        const response = await fetch(`/api/carritos/${carritoId}/iniciar_pago/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            }
+        });
+
+        const data = await response.json();
+        console.log('Respuesta de iniciar_pago:', data);
+        
+        if (response.ok) {
+            // Crear un formulario y enviarlo
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = data.url;
+            
+            const tokenInput = document.createElement('input');
+            tokenInput.type = 'hidden';
+            tokenInput.name = 'token_ws';
+            tokenInput.value = data.token;
+            
+            form.appendChild(tokenInput);
+            document.body.appendChild(form);
+            form.submit();
+        } else {
+            modal.hide();
+            showNotification(data.error || 'Error al iniciar el pago', 'danger');
+        }
+    } catch (error) {
+        modal.hide();
+        console.error('Error al iniciar pago:', error);
+        showNotification('Error al iniciar el pago', 'danger');
+    }
+}
+
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+function showNotification(message, type = 'info') {
+    const toast = document.createElement('div');
+    toast.className = `toast align-items-center text-white bg-${type} border-0`;
+    toast.setAttribute('role', 'alert');
+    toast.setAttribute('aria-live', 'assertive');
+    toast.setAttribute('aria-atomic', 'true');
+    
+    toast.innerHTML = `
+        <div class="d-flex">
+            <div class="toast-body">
+                ${message}
+            </div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+        </div>
+    `;
+    
+    const container = document.querySelector('.toast-container');
+    container.appendChild(toast);
+    const bsToast = new bootstrap.Toast(toast);
+    bsToast.show();
+    
+    toast.addEventListener('hidden.bs.toast', () => {
+        container.removeChild(toast);
+    });
+}
+
+// Event Listeners
+document.getElementById('sucursalSelect').addEventListener('change', (e) => {
+    if (e.target.value) {
+        cargarProductosSucursal(e.target.value);
+    } else {
+        document.getElementById('productoSelect').innerHTML = '<option value="">Seleccione un producto</option>';
+        document.getElementById('productoSelect').disabled = true;
+        document.getElementById('stockDisponible').textContent = '-';
+    }
+});
+
+document.getElementById('productoSelect').addEventListener('change', actualizarStockDisponible);
+
+document.getElementById('agregarAlCarritoForm').addEventListener('submit', agregarAlCarrito);
+
+document.getElementById('itemsCarrito').addEventListener('change', (e) => {
+    if (e.target.classList.contains('cantidad-input')) {
+        const itemId = e.target.dataset.itemId;
+        const cantidad = parseInt(e.target.value);
+        if (cantidad > 0) {
+            actualizarCantidadItem(itemId, cantidad);
+        }
+    }
+});
+
+document.getElementById('itemsCarrito').addEventListener('click', (e) => {
+    if (e.target.closest('.btn-eliminar')) {
+        const itemId = e.target.closest('.btn-eliminar').dataset.itemId;
+        eliminarItem(itemId);
+    }
+});
+
+document.getElementById('btnPagar').addEventListener('click', iniciarPago);
+
+// Inicialización
+document.addEventListener('DOMContentLoaded', () => {
+    inicializarCarrito();
+    cargarSucursales();
+});
+</script>
+{% endblock %} 

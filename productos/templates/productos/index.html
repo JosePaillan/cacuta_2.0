@@ -1,0 +1,306 @@
+{% extends 'productos/base.html' %}
+
+{% block content %}
+<div class="container">
+    <!-- Filtros -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="input-group">
+                <span class="input-group-text bg-primary text-white">
+                    <i class="fas fa-search"></i>
+                </span>
+                <input type="text" id="searchInput" class="form-control" placeholder="Buscar productos...">
+            </div>
+        </div>
+        <div class="col-md-4">
+            <select id="sucursalSelect" class="form-select">
+                <option value="">Todas las sucursales</option>
+            </select>
+        </div>
+        <div class="col-md-4">
+            <select id="ordenarSelect" class="form-select">
+                <option value="nombre">Ordenar por nombre</option>
+                <option value="precio_asc">Precio: menor a mayor</option>
+                <option value="precio_desc">Precio: mayor a menor</option>
+                <option value="stock_asc">Stock: menor a mayor</option>
+                <option value="stock_desc">Stock: mayor a menor</option>
+            </select>
+        </div>
+    </div>
+
+    <!-- Tabla de inventario -->
+    <div class="card shadow-sm">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Código</th>
+                            <th>Producto</th>
+                            <th>Descripción</th>
+                            <th>Sucursal</th>
+                            <th class="text-end">Precio</th>
+                            <th class="text-center">Stock</th>
+                            <th class="text-center">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="inventarioTableBody">
+                        <!-- El inventario se cargará aquí dinámicamente -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Actualización de Stock -->
+<div class="modal fade" id="actualizarStockModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Actualizar Stock</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">Producto</label>
+                    <p id="productoNombre" class="form-control-plaintext"></p>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Sucursal</label>
+                    <p id="sucursalNombre" class="form-control-plaintext"></p>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Stock Actual</label>
+                    <p id="stockActual" class="form-control-plaintext"></p>
+                </div>
+                <div class="mb-3">
+                    <label for="nuevoStock" class="form-label">Nuevo Stock</label>
+                    <input type="number" class="form-control" id="nuevoStock" min="0" required>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="guardarStock">
+                    <i class="fas fa-save me-1"></i>Guardar Cambios
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let productos = [];
+let sucursales = [];
+
+async function cargarSucursales() {
+    try {
+        const response = await fetch('/api/sucursales/');
+        const data = await response.json();
+        sucursales = data;
+        
+        const sucursalSelect = document.getElementById('sucursalSelect');
+        data.forEach(sucursal => {
+            const option = document.createElement('option');
+            option.value = sucursal.id;
+            option.textContent = sucursal.nombre;
+            sucursalSelect.appendChild(option);
+        });
+    } catch (error) {
+        console.error('Error al cargar sucursales:', error);
+        showNotification('Error al cargar las sucursales', 'danger');
+    }
+}
+
+async function cargarProductos() {
+    try {
+        const searchTerm = document.getElementById('searchInput').value;
+        const sucursalId = document.getElementById('sucursalSelect').value;
+        const ordenar = document.getElementById('ordenarSelect').value;
+        
+        const response = await fetch(`/api/productos/?nombre=${searchTerm}`);
+        const data = await response.json();
+        productos = data;
+        
+        const tableBody = document.getElementById('inventarioTableBody');
+        tableBody.innerHTML = '';
+        
+        data.forEach(producto => {
+            producto.sucursales.forEach(sucursalProducto => {
+                if (!sucursalId || sucursalId == sucursalProducto.sucursal) {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>${producto.codigo}</td>
+                        <td>${producto.nombre}</td>
+                        <td>${producto.descripcion}</td>
+                        <td>${sucursalProducto.nombre_sucursal}</td>
+                        <td class="text-end">$${sucursalProducto.precio.toLocaleString()}</td>
+                        <td class="text-center">
+                            <span class="badge ${sucursalProducto.stock > 20 ? 'bg-success' : 'bg-warning'}">
+                                ${sucursalProducto.stock}
+                            </span>
+                        </td>
+                        <td class="text-center">
+                            <button class="btn btn-sm btn-info" onclick="abrirModalActualizarStock('${producto.nombre}', '${sucursalProducto.nombre_sucursal}', ${sucursalProducto.stock}, ${producto.id}, ${sucursalProducto.sucursal})">
+                                <i class="fas fa-edit me-1"></i>Actualizar Stock
+                            </button>
+                        </td>
+                    `;
+                    tableBody.appendChild(tr);
+                }
+            });
+        });
+
+        // Ordenar tabla
+        const rows = Array.from(tableBody.getElementsByTagName('tr'));
+        rows.sort((a, b) => {
+            const aValue = a.cells[getColumnIndex(ordenar)].textContent;
+            const bValue = b.cells[getColumnIndex(ordenar)].textContent;
+            
+            if (ordenar.includes('precio')) {
+                const aPrice = parseFloat(aValue.replace('$', '').replace(',', ''));
+                const bPrice = parseFloat(bValue.replace('$', '').replace(',', ''));
+                return ordenar.includes('desc') ? bPrice - aPrice : aPrice - bPrice;
+            } else if (ordenar.includes('stock')) {
+                const aStock = parseInt(aValue);
+                const bStock = parseInt(bValue);
+                return ordenar.includes('desc') ? bStock - aStock : aStock - bStock;
+            } else {
+                return aValue.localeCompare(bValue);
+            }
+        });
+        
+        tableBody.innerHTML = '';
+        rows.forEach(row => tableBody.appendChild(row));
+    } catch (error) {
+        console.error('Error al cargar productos:', error);
+        showNotification('Error al cargar los productos', 'danger');
+    }
+}
+
+function getColumnIndex(ordenar) {
+    switch(ordenar) {
+        case 'nombre': return 1;
+        case 'precio_asc':
+        case 'precio_desc': return 4;
+        case 'stock_asc':
+        case 'stock_desc': return 5;
+        default: return 1;
+    }
+}
+
+let productoIdActual = null;
+let sucursalIdActual = null;
+
+function abrirModalActualizarStock(nombreProducto, nombreSucursal, stockActual, productoId, sucursalId) {
+    document.getElementById('productoNombre').textContent = nombreProducto;
+    document.getElementById('sucursalNombre').textContent = nombreSucursal;
+    document.getElementById('stockActual').textContent = stockActual;
+    document.getElementById('nuevoStock').value = stockActual;
+    
+    productoIdActual = productoId;
+    sucursalIdActual = sucursalId;
+
+    const modal = new bootstrap.Modal(document.getElementById('actualizarStockModal'));
+    modal.show();
+}
+
+async function actualizarStock() {
+    const nuevoStock = parseInt(document.getElementById('nuevoStock').value);
+    
+    if (isNaN(nuevoStock) || nuevoStock < 0) {
+        showNotification('Por favor ingrese una cantidad válida', 'warning');
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/productos/${productoIdActual}/actualizar_stock/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({
+                sucursal_id: sucursalIdActual,
+                stock: nuevoStock
+            })
+        });
+
+        const data = await response.json();
+        if (response.ok) {
+            showNotification('Stock actualizado con éxito', 'success');
+            const modal = bootstrap.Modal.getInstance(document.getElementById('actualizarStockModal'));
+            modal.hide();
+            await cargarProductos();
+        } else {
+            showNotification(data.error || 'Error al actualizar stock', 'danger');
+        }
+    } catch (error) {
+        console.error('Error al actualizar stock:', error);
+        showNotification('Error al actualizar stock', 'danger');
+    }
+}
+
+function showNotification(message, type = 'info') {
+    const toast = document.createElement('div');
+    toast.className = `toast align-items-center text-white bg-${type} border-0`;
+    toast.setAttribute('role', 'alert');
+    toast.setAttribute('aria-live', 'assertive');
+    toast.setAttribute('aria-atomic', 'true');
+    
+    toast.innerHTML = `
+        <div class="d-flex">
+            <div class="toast-body">
+                ${message}
+            </div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+        </div>
+    `;
+    
+    const container = document.querySelector('.toast-container');
+    container.appendChild(toast);
+    const bsToast = new bootstrap.Toast(toast);
+    bsToast.show();
+    
+    toast.addEventListener('hidden.bs.toast', () => {
+        container.removeChild(toast);
+    });
+}
+
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+// Event Listeners
+document.getElementById('searchInput').addEventListener('input', cargarProductos);
+document.getElementById('sucursalSelect').addEventListener('change', cargarProductos);
+document.getElementById('ordenarSelect').addEventListener('change', cargarProductos);
+document.getElementById('guardarStock').addEventListener('click', actualizarStock);
+
+// Inicialización
+document.addEventListener('DOMContentLoaded', () => {
+    cargarSucursales();
+    cargarProductos();
+});
+
+// WebSocket para notificaciones de stock
+const ws = new WebSocket(`ws://${window.location.host}/ws/stock/`);
+ws.onmessage = function(e) {
+    const data = JSON.parse(e.data);
+    showNotification(data.message, 'warning');
+};
+</script>
+{% endblock %} 
