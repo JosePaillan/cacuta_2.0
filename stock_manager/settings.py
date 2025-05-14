@@ -20,7 +20,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'rest_framework',
     'corsheaders',
-    'channels',
+    # 'channels',
     'productos',
 ]
 
@@ -54,7 +54,7 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'stock_manager.wsgi.application'
-ASGI_APPLICATION = 'stock_manager.asgi.application'
+# ASGI_APPLICATION = 'stock_manager.routing.application'
 
 DATABASES = {
     'default': {
@@ -91,11 +91,14 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOW_CREDENTIALS = True
 
-CHANNEL_LAYERS = {
-    'default': {
-        'BACKEND': 'channels.layers.InMemoryChannelLayer'
-    }
-}
+# CHANNEL_LAYERS = {
+#     "default": {
+#         "BACKEND": "channels.layers.InMemoryChannelLayer",
+#         "CONFIG": {
+#             "capacity": 1500,
+#         },
+#     },
+# }
 
 REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [

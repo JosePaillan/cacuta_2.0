@@ -1,6 +1,16 @@
-from django.urls import re_path
-from productos.consumers import StockConsumer
+from channels.auth import AuthMiddlewareStack
+from channels.routing import ProtocolTypeRouter, URLRouter
+from channels.security.websocket import AllowedHostsOriginValidator
+from django.core.asgi import get_asgi_application
+from productos.routing import websocket_urlpatterns
 
-websocket_urlpatterns = [
-    re_path(r'ws/stock/$', StockConsumer.as_asgi()),
-] 
+application = ProtocolTypeRouter({
+    "http": get_asgi_application(),
+    "websocket": AllowedHostsOriginValidator(
+        AuthMiddlewareStack(
+            URLRouter(
+                websocket_urlpatterns
+            )
+        )
+    ),
+}) 
