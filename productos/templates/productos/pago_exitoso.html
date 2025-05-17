@@ -1,0 +1,56 @@
+{% extends 'productos/base.html' %}
+{% load humanize %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card shadow">
+                <div class="card-body text-center">
+                    <div class="mb-4">
+                        <i class="fas fa-check-circle text-success fa-4x"></i>
+                    </div>
+                    
+                    <h3 class="mb-4">¡Pago Exitoso!</h3>
+                    
+                    <div class="alert alert-success">
+                        <p class="mb-0">Su pago ha sido procesado correctamente.</p>
+                    </div>
+                    
+                    <div class="card mb-4">
+                        <div class="card-body">
+                            <h5 class="card-title">Detalles de la Transacción</h5>
+                            <table class="table table-borderless">
+                                <tbody>
+                                    <tr>
+                                        <th scope="row">Orden de Compra:</th>
+                                        <td>{{ carrito.orden_compra }}</td>
+                                    </tr>
+                                    <tr>
+                                        <th scope="row">Total Pagado:</th>
+                                        <td>${{ carrito.total|floatformat:0|intcomma }}</td>
+                                    </tr>
+                                    <tr>
+                                        <th scope="row">Estado:</th>
+                                        <td>{{ response.status }}</td>
+                                    </tr>
+                                    <tr>
+                                        <th scope="row">Fecha:</th>
+                                        <td>{{ carrito.fecha_creacion|date:"d/m/Y H:i" }}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    <div class="text-center">
+                        <a href="{% url 'productos:lista_productos' %}" class="btn btn-primary">
+                            <i class="fas fa-home me-2"></i>Volver al Inicio
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

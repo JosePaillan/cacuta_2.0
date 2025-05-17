@@ -14,8 +14,8 @@ from django.urls import reverse
 from django.conf import settings
 from django.views.decorators.csrf import csrf_exempt
 
-from .models import Producto, Sucursal, ProductoSucursal, CarritoCompra, ItemCarrito, Venta
-from .serializers import ProductoSerializer, VentaSerializer, SucursalSerializer, ProductoSucursalSerializer, CarritoSerializer, ItemCarritoSerializer
+from .models import Producto, Sucursal, Stock, CarritoCompra, ItemCarrito, Venta
+from .serializers import ProductoSerializer, VentaSerializer, SucursalSerializer, StockSerializer, CarritoSerializer, ItemCarritoSerializer
 
 # Configuración de Transbank para ambiente de integración
 webpay_options = WebpayOptions(
@@ -48,13 +48,13 @@ class ProductoViewSet(viewsets.ModelViewSet):
             )
 
         try:
-            producto_sucursal = ProductoSucursal.objects.get(
+            stock = Stock.objects.get(
                 producto=producto,
                 sucursal_id=sucursal_id
             )
-            serializer = ProductoSucursalSerializer(producto_sucursal)
+            serializer = StockSerializer(stock)
             return Response(serializer.data)
-        except ProductoSucursal.DoesNotExist:
+        except Stock.DoesNotExist:
             return Response(
                 {"error": "Sucursal no encontrada para este producto"},
                 status=status.HTTP_404_NOT_FOUND
@@ -73,7 +73,7 @@ class ProductoViewSet(viewsets.ModelViewSet):
 
         try:
             with transaction.atomic():
-                producto_sucursal = ProductoSucursal.objects.get(
+                stock = Stock.objects.get(
                     producto=producto,
                     sucursal_id=serializer.validated_data['sucursal_id']
                 )
@@ -81,7 +81,7 @@ class ProductoViewSet(viewsets.ModelViewSet):
                 cantidad = serializer.validated_data['cantidad']
 
                 # Verificar stock
-                if producto_sucursal.stock < cantidad:
+                if stock.cantidad < cantidad:
                     return Response(
                         {"error": "Stock insuficiente"},
                         status=status.HTTP_400_BAD_REQUEST
@@ -89,34 +89,34 @@ class ProductoViewSet(viewsets.ModelViewSet):
 
                 # Crear la venta
                 venta = Venta.objects.create(
-                    sucursal=producto_sucursal.sucursal,
+                    sucursal=stock.sucursal,
                     producto=producto,
                     cantidad=cantidad,
-                    precio_unitario=producto_sucursal.precio,
-                    total=producto_sucursal.precio * cantidad
+                    precio_unitario=stock.precio,
+                    total=stock.precio * cantidad
                 )
 
                 # Actualizar stock
-                producto_sucursal.stock -= cantidad
-                producto_sucursal.save()
+                stock.cantidad -= cantidad
+                stock.save()
 
                 # Notificar si el stock es bajo
-                if producto_sucursal.stock <= 5:
+                if stock.cantidad <= 5:
                     channel_layer = get_channel_layer()
                     async_to_sync(channel_layer.group_send)(
                         "stock_notifications",
                         {
                             "type": "stock_notification",
-                            "message": f"¡Alerta! Stock bajo ({producto_sucursal.stock} unidades) en {producto_sucursal.sucursal.nombre} para {producto.nombre}"
+                            "message": f"¡Alerta! Stock bajo ({stock.cantidad} unidades) en {stock.sucursal.nombre} para {producto.nombre}"
                         }
                     )
 
                 return Response({
                     "mensaje": "Venta realizada con éxito",
                     "venta_id": venta.id,
-                    "nuevo_stock": producto_sucursal.stock
+                    "nuevo_stock": stock.cantidad
                 })
-        except ProductoSucursal.DoesNotExist:
+        except Stock.DoesNotExist:
             return Response(
                 {"error": "Sucursal no encontrada para este producto"},
                 status=status.HTTP_404_NOT_FOUND
@@ -132,21 +132,21 @@ class ProductoViewSet(viewsets.ModelViewSet):
         
         if sucursal_id:
             try:
-                producto_sucursal = ProductoSucursal.objects.get(
+                stock = Stock.objects.get(
                     producto=producto,
                     sucursal_id=sucursal_id
                 )
-                precio_usd = Decimal(str(producto_sucursal.precio)) / tipo_cambio
+                precio_usd = Decimal(str(stock.precio)) / tipo_cambio
                 return Response({
                     "precio_usd": round(precio_usd, 2)
                 })
-            except ProductoSucursal.DoesNotExist:
+            except Stock.DoesNotExist:
                 return Response(
                     {"error": "Sucursal no encontrada para este producto"},
                     status=status.HTTP_404_NOT_FOUND
                 )
         else:
-            precio_usd = Decimal(str(producto.precio_casa_matriz)) / tipo_cambio
+            precio_usd = producto.precio_base / tipo_cambio
             return Response({
                 "precio_usd": round(precio_usd, 2)
             })
@@ -156,43 +156,43 @@ class ProductoViewSet(viewsets.ModelViewSet):
         try:
             producto = self.get_object()
             sucursal_id = request.data.get('sucursal_id')
-            nuevo_stock = request.data.get('stock')
+            nueva_cantidad = request.data.get('cantidad')
             
-            if nuevo_stock is None:
-                return Response({'error': 'Debe proporcionar el nuevo stock'}, status=400)
+            if nueva_cantidad is None:
+                return Response({'error': 'Debe proporcionar la nueva cantidad'}, status=400)
             
             if sucursal_id is None:
                 return Response({'error': 'Debe proporcionar el ID de la sucursal'}, status=400)
             
             try:
-                producto_sucursal = ProductoSucursal.objects.get(
+                stock = Stock.objects.get(
                     producto=producto,
                     sucursal_id=sucursal_id
                 )
-            except ProductoSucursal.DoesNotExist:
+            except Stock.DoesNotExist:
                 return Response({'error': 'No se encontró el producto en la sucursal especificada'}, status=404)
             
-            producto_sucursal.stock = nuevo_stock
-            producto_sucursal.save()
+            stock.cantidad = nueva_cantidad
+            stock.save()
 
             # Notificar si el stock es bajo (menor o igual a 5)
-            if producto_sucursal.stock <= 5:
+            if stock.cantidad <= 5:
                 channel_layer = get_channel_layer()
                 async_to_sync(channel_layer.group_send)(
                     "stock_notifications",
                     {
                         "type": "stock_notification",
-                        "message": f"¡Alerta! Stock bajo ({producto_sucursal.stock} unidades) en {producto_sucursal.sucursal.nombre} para {producto_sucursal.producto.nombre}"
+                        "message": f"¡Alerta! Stock bajo ({stock.cantidad} unidades) en {stock.sucursal.nombre} para {stock.producto.nombre}"
                     }
                 )
 
-            return Response({'stock': producto_sucursal.stock})
+            return Response({'cantidad': stock.cantidad})
         except Exception as e:
             return Response({'error': str(e)}, status=400)
 
 class SucursalViewSet(viewsets.ModelViewSet):
     queryset = Sucursal.objects.all()
-    serializer_class = SucursalSerializer 
+    serializer_class = SucursalSerializer
 
 class CarritoViewSet(viewsets.ModelViewSet):
     queryset = CarritoCompra.objects.all()
@@ -201,102 +201,96 @@ class CarritoViewSet(viewsets.ModelViewSet):
     def create(self, request, *args, **kwargs):
         # Buscar un carrito no completado existente
         carrito = CarritoCompra.objects.filter(
-            usuario='anonymous',
+            usuario=request.data.get('usuario', 'anonymous'),
             completado=False
         ).first()
 
-        if not carrito:
-            carrito = CarritoCompra.objects.create(usuario='anonymous')
+        if carrito:
+            serializer = self.get_serializer(carrito)
+            return Response(serializer.data)
 
-        serializer = self.get_serializer(carrito)
-        return Response(serializer.data)
+        return super().create(request, *args, **kwargs)
 
     @action(detail=True, methods=['post'])
     def agregar_item(self, request, pk=None):
         carrito = self.get_object()
         if carrito.completado:
             return Response(
-                {"error": "Este carrito ya está completado"},
+                {"error": "No se puede modificar un carrito completado"},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        serializer = ItemCarritoSerializer(data=request.data)
-        if serializer.is_valid():
-            try:
-                with transaction.atomic():
-                    producto_sucursal = serializer.validated_data['producto_sucursal']
-                    cantidad = serializer.validated_data['cantidad']
-
-                    # Verificar stock disponible
-                    if producto_sucursal.stock < cantidad:
-                        return Response(
-                            {"error": "Stock insuficiente"},
-                            status=status.HTTP_400_BAD_REQUEST
-                        )
-
-                    try:
-                        item = ItemCarrito.objects.get(
-                            carrito=carrito,
-                            producto_sucursal=producto_sucursal
-                        )
-                        item.cantidad += cantidad
-                        item.full_clean()
-                        item.save()
-                    except ItemCarrito.DoesNotExist:
-                        serializer.save(carrito=carrito)
-
-                    return Response(CarritoSerializer(carrito).data)
-            except ValidationError as e:
-                return Response(
-                    {"error": str(e)},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-    @action(detail=True, methods=['post'])
-    def actualizar_item(self, request, pk=None):
-        carrito = self.get_object()
-        if carrito.completado:
-            return Response(
-                {"error": "Este carrito ya está completado"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+        producto_id = request.data.get('producto_id')
+        sucursal_id = request.data.get('sucursal_id')
+        cantidad = int(request.data.get('cantidad', 1))
 
         try:
-            with transaction.atomic():
-                item = carrito.items.get(id=request.data.get('item_id'))
-                nueva_cantidad = request.data.get('cantidad', item.cantidad)
+            stock = Stock.objects.get(
+                producto_id=producto_id,
+                sucursal_id=sucursal_id
+            )
 
-                # Verificar stock disponible
-                if item.producto_sucursal.stock < nueva_cantidad:
+            if stock.cantidad < cantidad:
+                return Response(
+                    {"error": "Stock insuficiente"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            item, created = ItemCarrito.objects.get_or_create(
+                carrito=carrito,
+                stock=stock,
+                defaults={'cantidad': cantidad}
+            )
+
+            if not created:
+                item.cantidad += cantidad
+                if item.cantidad > stock.cantidad:
                     return Response(
                         {"error": "Stock insuficiente"},
                         status=status.HTTP_400_BAD_REQUEST
                     )
-
-                item.cantidad = nueva_cantidad
-                item.full_clean()
                 item.save()
-                return Response(CarritoSerializer(carrito).data)
-        except (ItemCarrito.DoesNotExist, ValidationError) as e:
+
+            serializer = CarritoSerializer(carrito)
+            return Response(serializer.data)
+
+        except Stock.DoesNotExist:
+            return Response(
+                {"error": "Producto no encontrado en la sucursal especificada"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
             return Response(
                 {"error": str(e)},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
     @action(detail=True, methods=['post'])
-    def eliminar_item(self, request, pk=None):
+    def actualizar_item(self, request, pk=None):
         carrito = self.get_object()
         if carrito.completado:
             return Response(
-                {"error": "Este carrito ya está completado"},
+                {"error": "No se puede modificar un carrito completado"},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+        item_id = request.data.get('item_id')
+        cantidad = request.data.get('cantidad')
+
         try:
-            item = carrito.items.get(id=request.data.get('item_id'))
-            item.delete()
-            return Response(CarritoSerializer(carrito).data)
+            item = ItemCarrito.objects.get(id=item_id, carrito=carrito)
+            if cantidad > item.stock.cantidad:
+                return Response(
+                    {"error": "Stock insuficiente"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            item.cantidad = cantidad
+            item.save()
+
+            serializer = CarritoSerializer(carrito)
+            return Response(serializer.data)
+
         except ItemCarrito.DoesNotExist:
             return Response(
                 {"error": "Item no encontrado"},
@@ -304,212 +298,85 @@ class CarritoViewSet(viewsets.ModelViewSet):
             )
 
     @action(detail=True, methods=['post'])
-    def completar(self, request, pk=None):
+    def eliminar_item(self, request, pk=None):
         carrito = self.get_object()
         if carrito.completado:
             return Response(
-                {"error": "Este carrito ya está completado"},
+                {"error": "No se puede modificar un carrito completado"},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        try:
-            with transaction.atomic():
-                for item in carrito.items.all():
-                    producto_sucursal = item.producto_sucursal
-                    if producto_sucursal.stock < item.cantidad:
-                        raise ValidationError(
-                            f"Stock insuficiente para {item.producto_sucursal.producto.nombre}"
-                        )
-                    
-                    # Crear venta y actualizar stock
-                    Venta.objects.create(
-                        sucursal=producto_sucursal.sucursal,
-                        producto=producto_sucursal.producto,
-                        cantidad=item.cantidad,
-                        precio_unitario=producto_sucursal.precio,
-                        total=item.subtotal
-                    )
-                    producto_sucursal.stock -= item.cantidad
-                    producto_sucursal.save()
+        item_id = request.data.get('item_id')
+        ItemCarrito.objects.filter(id=item_id, carrito=carrito).delete()
 
-                    # Notificar si el stock es bajo
-                    if producto_sucursal.stock <= 5:
-                        channel_layer = get_channel_layer()
-                        async_to_sync(channel_layer.group_send)(
-                            "stock_notifications",
-                            {
-                                "type": "stock_notification",
-                                "message": f"¡Alerta! Stock bajo ({producto_sucursal.stock} unidades) en {producto_sucursal.sucursal.nombre} para {producto_sucursal.producto.nombre}"
-                            }
-                        )
-                
-                carrito.completado = True
-                carrito.save()
-                return Response({"mensaje": "Compra completada con éxito"})
-        except ValidationError as e:
-            return Response(
-                {"error": str(e)},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-    @action(detail=True, methods=['post', 'get'])
-    def confirmar_pago(self, request, pk=None):
-        carrito = self.get_object()
-        
-        # Si es GET, mostrar página de espera
-        if request.method == 'GET':
-            return render(request, 'productos/webpay_return.html')
-        
-        # Obtener el token del POST o GET
-        token = request.POST.get('token_ws') or request.GET.get('token_ws')
-        
-        if not token:
-            return render(request, 'productos/webpay_return.html', {
-                'error': 'Token no proporcionado'
-            })
-        
-        try:
-            print(f"Confirmando pago con token: {token}")  # Debug log
-            response = tx.commit(token=token)
-            print(f"Respuesta de confirmación: {response.__dict__ if hasattr(response, '__dict__') else response}")
-            
-            if hasattr(response, 'status'):
-                status = response.status
-            elif isinstance(response, dict):
-                status = response.get('status')
-            else:
-                status = str(response)
-            
-            print(f"Estado de la transacción: {status}")
-            
-            if status == 'AUTHORIZED':
-                with transaction.atomic():
-                    # Procesar la compra
-                    for item in carrito.items.all():
-                        producto_sucursal = item.producto_sucursal
-                        if producto_sucursal.stock < item.cantidad:
-                            raise ValidationError(
-                                f"Stock insuficiente para {item.producto_sucursal.producto.nombre}"
-                            )
-                        
-                        Venta.objects.create(
-                            sucursal=producto_sucursal.sucursal,
-                            producto=producto_sucursal.producto,
-                            cantidad=item.cantidad,
-                            precio_unitario=producto_sucursal.precio,
-                            total=item.subtotal
-                        )
-                        producto_sucursal.stock -= item.cantidad
-                        producto_sucursal.save()
-
-                        if producto_sucursal.stock <= 5:
-                            channel_layer = get_channel_layer()
-                            async_to_sync(channel_layer.group_send)(
-                                "stock_notifications",
-                                {
-                                    "type": "stock_notification",
-                                    "message": f"¡Alerta! Stock bajo ({producto_sucursal.stock} unidades) en {producto_sucursal.sucursal.nombre} para {producto_sucursal.producto.nombre}"
-                                }
-                            )
-                    
-                    carrito.completado = True
-                    carrito.save()
-                
-                return render(request, 'productos/webpay_return.html', {
-                    'success': True,
-                    'response': {
-                        'authorization_code': getattr(response, 'authorization_code', ''),
-                        'amount': getattr(response, 'amount', ''),
-                        'buy_order': getattr(response, 'buy_order', ''),
-                        'response_code': getattr(response, 'response_code', '')
-                    }
-                })
-            else:
-                print(f"Pago rechazado con estado: {status}")
-                return render(request, 'productos/webpay_return.html', {
-                    'error': 'Pago rechazado',
-                    'status': status
-                })
-                
-        except Exception as e:
-            print(f"Error en confirmación: {str(e)}")
-            print(f"Tipo de error: {type(e)}")
-            import traceback
-            print(f"Traceback: {traceback.format_exc()}")
-            return render(request, 'productos/webpay_return.html', {
-                'error': str(e)
-            })
+        serializer = CarritoSerializer(carrito)
+        return Response(serializer.data)
 
     @action(detail=True, methods=['post'])
     def iniciar_pago(self, request, pk=None):
         carrito = self.get_object()
-        if carrito.completado:
+        
+        if not carrito.items.exists():
             return Response(
-                {"error": "Este carrito ya está completado"},
+                {"error": "El carrito está vacío"},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        try:
-            # Calcular el monto total
-            monto_total = int(sum(item.subtotal for item in carrito.items.all()))
-            if monto_total <= 0:
+        # Verificar stock antes de iniciar el pago
+        for item in carrito.items.all():
+            if item.cantidad > item.stock.cantidad:
                 return Response(
-                    {"error": "El carrito está vacío"},
+                    {
+                        "error": f"Stock insuficiente para {item.stock.producto.nombre}",
+                        "disponible": item.stock.cantidad,
+                        "solicitado": item.cantidad
+                    },
                     status=status.HTTP_400_BAD_REQUEST
                 )
-            
-            # Crear la transacción en Transbank
-            buy_order = str(carrito.id)
-            session_id = str(carrito.id)
-            
-            # URL de retorno
-            return_url = "http://127.0.0.1:8000/webpay/return/"
-            
-            print("Iniciando transacción con:")
-            print(f"- Monto: {monto_total}")
-            print(f"- Orden: {buy_order}")
-            print(f"- Sesión: {session_id}")
-            print(f"- URL retorno: {return_url}")
-            
-            # Crear la transacción
-            create_request = {
-                "buy_order": buy_order,
-                "session_id": session_id,
-                "amount": monto_total,
-                "return_url": return_url
-            }
-            print("Request de creación:", create_request)
-            
-            response = tx.create(
-                buy_order=buy_order,
-                session_id=session_id,
-                amount=monto_total,
-                return_url=return_url
-            )
-            
-            print("Respuesta de Transbank:", response)
-            
-            # Guardar los datos de la transacción en el carrito
-            carrito.orden_compra = buy_order
-            carrito.session_id = session_id
-            carrito.token_ws = response.token if hasattr(response, 'token') else response['token']
-            carrito.save()
-            
-            # Retornar la URL y el token
-            return Response({
-                "url": response.url if hasattr(response, 'url') else response['url'],
-                "token": response.token if hasattr(response, 'token') else response['token']
-            })
-            
-        except Exception as e:
-            print(f"Error al iniciar pago: {str(e)}")
-            print(f"Tipo de error: {type(e)}")
-            import traceback
-            print(f"Traceback: {traceback.format_exc()}")
-            return Response(
-                {"error": str(e)},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+
+        # Crear orden de compra
+        orden = str(carrito.id)
+        sesion = str(carrito.id)
+        monto = int(carrito.total)
+        
+        # URL de retorno
+        return_url = request.build_absolute_uri(reverse('productos:webpay_return'))
+
+        print("Iniciando transacción con:")
+        print(f"- Monto: {monto}")
+        print(f"- Orden: {orden}")
+        print(f"- Sesión: {sesion}")
+        print(f"- URL retorno: {return_url}")
+
+        # Crear transacción en Transbank
+        create_request = {
+            "buy_order": orden,
+            "session_id": sesion,
+            "amount": monto,
+            "return_url": return_url
+        }
+
+        print("Request de creación:", create_request)
+
+        response = tx.create(
+            buy_order=orden,
+            session_id=sesion,
+            amount=monto,
+            return_url=return_url
+        )
+
+        print("Respuesta de Transbank:", response)
+
+        # Guardar token
+        carrito.orden_compra = orden
+        carrito.session_id = sesion
+        carrito.token_ws = response['token']
+        carrito.save()
+
+        return Response({
+            "token": response['token'],
+            "url": response['url']
+        })
 
 @csrf_exempt
 def webpay_return(request):
@@ -517,129 +384,90 @@ def webpay_return(request):
     print("Método:", request.method)
     print("POST data:", request.POST)
     print("GET data:", request.GET)
-    
-    # Obtener el token de POST o GET
-    token = request.POST.get('token_ws') or request.GET.get('token_ws')
-    
-    if not token:
-        print("Token no encontrado en la solicitud")
-        return render(request, 'productos/webpay_return.html', {
-            'error': 'Token no proporcionado'
-        })
-    
-    print(f"Token encontrado: {token}")
-    
-    try:
-        # Si es GET, significa que Webpay está haciendo la redirección inicial
-        if request.method == 'GET':
-            print("Redirección inicial de Webpay - Creando formulario de confirmación")
-            # Crear un formulario para hacer el POST de confirmación
-            return render(request, 'productos/webpay_confirm.html', {
-                'token': token,
-                'return_url': request.path
-            })
-        
-        print(f"Confirmando pago con token: {token}")
-        response = tx.commit(token=token)
-        print(f"Respuesta de confirmación completa: {response.__dict__ if hasattr(response, '__dict__') else response}")
-        
-        # Extraer el estado de la transacción
-        if hasattr(response, 'status'):
-            status = response.status
-        elif isinstance(response, dict):
-            status = response.get('status')
-        else:
-            status = str(response)
-        
-        print(f"Estado de la transacción: {status}")
-        
-        # Extraer el código de respuesta si existe
-        response_code = None
-        if hasattr(response, 'response_code'):
-            response_code = response.response_code
-        elif isinstance(response, dict):
-            response_code = response.get('response_code')
-        
-        print(f"Código de respuesta: {response_code}")
-        
-        if status == 'AUTHORIZED':
-            try:
-                carrito = CarritoCompra.objects.get(token_ws=token)
-                print(f"Carrito encontrado: {carrito.id}")
-                
-                with transaction.atomic():
-                    # Procesar la compra
-                    for item in carrito.items.all():
-                        producto_sucursal = item.producto_sucursal
-                        if producto_sucursal.stock < item.cantidad:
-                            raise ValidationError(
-                                f"Stock insuficiente para {item.producto_sucursal.producto.nombre}"
-                            )
-                        
-                        Venta.objects.create(
-                            sucursal=producto_sucursal.sucursal,
-                            producto=producto_sucursal.producto,
-                            cantidad=item.cantidad,
-                            precio_unitario=producto_sucursal.precio,
-                            total=item.subtotal
-                        )
-                        producto_sucursal.stock -= item.cantidad
-                        producto_sucursal.save()
 
-                        if producto_sucursal.stock <= 5:
-                            channel_layer = get_channel_layer()
-                            async_to_sync(channel_layer.group_send)(
-                                "stock_notifications",
-                                {
-                                    "type": "stock_notification",
-                                    "message": f"¡Alerta! Stock bajo ({producto_sucursal.stock} unidades) en {producto_sucursal.sucursal.nombre} para {producto_sucursal.producto.nombre}"
-                                }
-                            )
-                    
-                    carrito.completado = True
-                    carrito.save()
-                    print("Compra procesada exitosamente")
-                
-                return render(request, 'productos/webpay_return.html', {
-                    'success': True,
-                    'response': {
-                        'authorization_code': getattr(response, 'authorization_code', ''),
-                        'amount': getattr(response, 'amount', ''),
-                        'buy_order': getattr(response, 'buy_order', ''),
-                        'response_code': response_code
-                    }
-                })
-            except CarritoCompra.DoesNotExist:
-                error_msg = f"No se encontró el carrito con token: {token}"
-                print(error_msg)
-                return render(request, 'productos/webpay_return.html', {
-                    'error': error_msg,
-                    'status': status
-                })
-            except ValidationError as e:
-                error_msg = f"Error de validación: {str(e)}"
-                print(error_msg)
-                return render(request, 'productos/webpay_return.html', {
-                    'error': error_msg,
-                    'status': status
-                })
-        else:
-            error_msg = f"Pago rechazado con estado: {status}"
-            if response_code:
-                error_msg += f" (código: {response_code})"
-            print(error_msg)
-            return render(request, 'productos/webpay_return.html', {
-                'error': error_msg,
-                'status': status
+    if request.method == "GET":
+        token = request.GET.get('token_ws', None)
+        if not token:
+            print("Token no encontrado en la solicitud")
+            return render(request, 'productos/pago_error.html', {
+                'error': 'Token no encontrado'
             })
-            
-    except Exception as e:
-        print(f"Error en confirmación: {str(e)}")
-        print(f"Tipo de error: {type(e)}")
-        import traceback
-        print(f"Traceback: {traceback.format_exc()}")
-        return render(request, 'productos/webpay_return.html', {
-            'error': f"Error procesando el pago: {str(e)}"
+
+        print("Token encontrado:", token)
+        print("Redirección inicial de Webpay - Creando formulario de confirmación")
+        
+        return render(request, 'productos/confirmar_pago.html', {
+            'token': token
         })
-    finally:
-        print("=== FIN WEBPAY RETURN ===")
+
+    elif request.method == "POST":
+        token = request.POST.get('token_ws', None)
+        
+        if not token:
+            print("Token no encontrado en el POST")
+            return render(request, 'productos/pago_error.html', {
+                'error': 'Token de transacción no encontrado'
+            })
+        
+        print("Token encontrado:", token)
+        print("Confirmando pago con token:", token)
+
+        try:
+            response = tx.commit(token=token)
+            print("Respuesta de confirmación completa:", response)
+            
+            if response['status'] == 'AUTHORIZED':
+                print("Estado de la transacción:", response['status'])
+                print("Código de respuesta:", response['response_code'])
+
+                try:
+                    carrito = CarritoCompra.objects.get(token_ws=token)
+                    print("Carrito encontrado:", carrito.id)
+
+                    with transaction.atomic():
+                        # Actualizar stock
+                        for item in carrito.items.all():
+                            stock = item.stock
+                            stock.cantidad -= item.cantidad
+                            stock.save()
+
+                            # Crear venta
+                            Venta.objects.create(
+                                sucursal=stock.sucursal,
+                                producto=stock.producto,
+                                cantidad=item.cantidad,
+                                precio_unitario=stock.precio,
+                                total=item.subtotal
+                            )
+
+                        carrito.completado = True
+                        carrito.save()
+                        print("Compra procesada exitosamente")
+
+                        return render(request, 'productos/pago_exitoso.html', {
+                            'response': response,
+                            'carrito': carrito
+                        })
+
+                except CarritoCompra.DoesNotExist:
+                    print("Error: Carrito no encontrado")
+                    return render(request, 'productos/pago_error.html', {
+                        'error': 'Carrito no encontrado'
+                    })
+
+            else:
+                print("Error: Transacción no autorizada")
+                return render(request, 'productos/pago_error.html', {
+                    'error': 'Transacción no autorizada'
+                })
+
+        except Exception as e:
+            print("Error al procesar el pago:", str(e))
+            return render(request, 'productos/pago_error.html', {
+                'error': str(e)
+            })
+
+    print("=== FIN WEBPAY RETURN ===")
+    return render(request, 'productos/pago_error.html', {
+        'error': 'Método no soportado'
+    })

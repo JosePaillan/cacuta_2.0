@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Producto, Sucursal, ProductoSucursal, Venta, ItemCarrito, CarritoCompra
+from .models import Producto, Sucursal, Stock, Venta, ItemCarrito, CarritoCompra
 from .utils import get_usd_rate
 from decimal import Decimal
 
@@ -8,20 +8,21 @@ class SucursalSerializer(serializers.ModelSerializer):
         model = Sucursal
         fields = ['id', 'nombre', 'direccion', 'telefono', 'email', 'es_casa_matriz']
 
-class ProductoSucursalSerializer(serializers.ModelSerializer):
+class StockSerializer(serializers.ModelSerializer):
     nombre_sucursal = serializers.CharField(source='sucursal.nombre', read_only=True)
+    nombre_producto = serializers.CharField(source='producto.nombre', read_only=True)
 
     class Meta:
-        model = ProductoSucursal
-        fields = ['id', 'sucursal', 'nombre_sucursal', 'precio', 'stock', 'ultima_actualizacion']
+        model = Stock
+        fields = ['id', 'sucursal', 'nombre_sucursal', 'producto', 'nombre_producto', 'precio', 'cantidad', 'ultima_actualizacion']
 
 class ProductoSerializer(serializers.ModelSerializer):
-    sucursales = ProductoSucursalSerializer(many=True, read_only=True, source='productosucursal_set')
+    stocks = StockSerializer(many=True, read_only=True)
 
     class Meta:
         model = Producto
-        fields = ['id', 'nombre', 'codigo', 'descripcion', 'precio_base', 
-                 'sucursales', 'fecha_creacion', 'fecha_actualizacion']
+        fields = ['id', 'nombre', 'descripcion', 'categoria', 'precio_base', 
+                 'stocks', 'fecha_creacion', 'fecha_actualizacion']
         read_only_fields = ['fecha_creacion', 'fecha_actualizacion']
 
     def create(self, validated_data):
@@ -48,14 +49,14 @@ class VentaSerializer(serializers.ModelSerializer):
         return value
 
 class ItemCarritoSerializer(serializers.ModelSerializer):
-    nombre_producto = serializers.CharField(source='producto_sucursal.producto.nombre', read_only=True)
-    nombre_sucursal = serializers.CharField(source='producto_sucursal.sucursal.nombre', read_only=True)
-    precio_unitario = serializers.DecimalField(source='producto_sucursal.precio', max_digits=10, decimal_places=2, read_only=True)
+    nombre_producto = serializers.CharField(source='stock.producto.nombre', read_only=True)
+    nombre_sucursal = serializers.CharField(source='stock.sucursal.nombre', read_only=True)
+    precio_unitario = serializers.DecimalField(source='stock.precio', max_digits=10, decimal_places=2, read_only=True)
     subtotal = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
 
     class Meta:
         model = ItemCarrito
-        fields = ['id', 'producto_sucursal', 'cantidad', 'nombre_producto', 
+        fields = ['id', 'stock', 'cantidad', 'nombre_producto', 
                  'nombre_sucursal', 'precio_unitario', 'subtotal', 'fecha_agregado']
         read_only_fields = ['fecha_agregado']
 

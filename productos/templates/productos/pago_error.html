@@ -1,0 +1,32 @@
+{% extends 'productos/base.html' %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card shadow">
+                <div class="card-body text-center">
+                    <div class="mb-4">
+                        <i class="fas fa-exclamation-circle text-danger fa-4x"></i>
+                    </div>
+                    
+                    <h3 class="mb-4">Error en el Pago</h3>
+                    
+                    <div class="alert alert-danger">
+                        <p class="mb-0">{{ error|default:"Ha ocurrido un error al procesar su pago." }}</p>
+                    </div>
+                    
+                    <div class="mt-4">
+                        <a href="{% url 'productos:carrito' %}" class="btn btn-primary me-2">
+                            <i class="fas fa-shopping-cart me-2"></i>Volver al Carrito
+                        </a>
+                        <a href="{% url 'productos:lista_productos' %}" class="btn btn-outline-primary">
+                            <i class="fas fa-home me-2"></i>Ir al Inicio
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

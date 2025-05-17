@@ -35,7 +35,7 @@
                 <table class="table table-hover">
                     <thead class="table-light">
                         <tr>
-                            <th>Código</th>
+                            <th>Categoría</th>
                             <th>Producto</th>
                             <th>Descripción</th>
                             <th>Sucursal</th>
@@ -128,22 +128,22 @@ async function cargarProductos() {
         tableBody.innerHTML = '';
         
         data.forEach(producto => {
-            producto.sucursales.forEach(sucursalProducto => {
-                if (!sucursalId || sucursalId == sucursalProducto.sucursal) {
+            producto.stocks.forEach(stock => {
+                if (!sucursalId || sucursalId == stock.sucursal) {
                     const tr = document.createElement('tr');
                     tr.innerHTML = `
-                        <td>${producto.codigo}</td>
+                        <td>${producto.categoria}</td>
                         <td>${producto.nombre}</td>
                         <td>${producto.descripcion}</td>
-                        <td>${sucursalProducto.nombre_sucursal}</td>
-                        <td class="text-end">$${sucursalProducto.precio.toLocaleString()}</td>
+                        <td>${stock.nombre_sucursal}</td>
+                        <td class="text-end">$${stock.precio.toLocaleString()}</td>
                         <td class="text-center">
-                            <span class="badge ${sucursalProducto.stock > 20 ? 'bg-success' : 'bg-warning'}">
-                                ${sucursalProducto.stock}
+                            <span class="badge ${stock.cantidad > 20 ? 'bg-success' : 'bg-warning'}">
+                                ${stock.cantidad}
                             </span>
                         </td>
                         <td class="text-center">
-                            <button class="btn btn-sm btn-info" onclick="abrirModalActualizarStock('${producto.nombre}', '${sucursalProducto.nombre_sucursal}', ${sucursalProducto.stock}, ${producto.id}, ${sucursalProducto.sucursal})">
+                            <button class="btn btn-sm btn-info" onclick="abrirModalActualizarStock('${producto.nombre}', '${stock.nombre_sucursal}', ${stock.cantidad}, ${producto.id}, ${stock.sucursal})">
                                 <i class="fas fa-edit me-1"></i>Actualizar Stock
                             </button>
                         </td>
@@ -209,9 +209,8 @@ function abrirModalActualizarStock(nombreProducto, nombreSucursal, stockActual, 
 
 async function actualizarStock() {
     const nuevoStock = parseInt(document.getElementById('nuevoStock').value);
-    
     if (isNaN(nuevoStock) || nuevoStock < 0) {
-        showNotification('Por favor ingrese una cantidad válida', 'warning');
+        showNotification('El stock debe ser un número positivo', 'danger');
         return;
     }
 
@@ -224,22 +223,24 @@ async function actualizarStock() {
             },
             body: JSON.stringify({
                 sucursal_id: sucursalIdActual,
-                stock: nuevoStock
+                cantidad: nuevoStock
             })
         });
 
-        const data = await response.json();
-        if (response.ok) {
-            showNotification('Stock actualizado con éxito', 'success');
-            const modal = bootstrap.Modal.getInstance(document.getElementById('actualizarStockModal'));
-            modal.hide();
-            await cargarProductos();
-        } else {
-            showNotification(data.error || 'Error al actualizar stock', 'danger');
+        if (!response.ok) {
+            throw new Error('Error al actualizar el stock');
         }
+
+        const data = await response.json();
+        showNotification('Stock actualizado correctamente', 'success');
+        
+        // Cerrar modal y recargar datos
+        const modal = bootstrap.Modal.getInstance(document.getElementById('actualizarStockModal'));
+        modal.hide();
+        cargarProductos();
     } catch (error) {
-        console.error('Error al actualizar stock:', error);
-        showNotification('Error al actualizar stock', 'danger');
+        console.error('Error:', error);
+        showNotification('Error al actualizar el stock', 'danger');
     }
 }
 
