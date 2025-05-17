@@ -58,7 +58,10 @@
                         </div>
                         <div class="d-flex justify-content-between align-items-center mb-3">
                             <h5 class="mb-0">Total:</h5>
-                            <h5 class="mb-0" id="totalCarrito">$0</h5>
+                            <div class="text-end">
+                                <h5 class="mb-0" id="totalCarrito">$0</h5>
+                                <small class="text-muted" id="totalCarritoUSD">USD $0.00</small>
+                            </div>
                         </div>
                         <button class="btn btn-success w-100" id="btnPagar">
                             <i class="fas fa-credit-card me-1"></i>Pagar con Webpay
@@ -235,6 +238,7 @@ function actualizarCarrito(data) {
     const carritoItems = document.getElementById('carritoItems');
     const itemsContainer = document.getElementById('itemsCarrito');
     const totalCarrito = document.getElementById('totalCarrito');
+    const totalCarritoUSD = document.getElementById('totalCarritoUSD');
     
     if (data.items.length === 0) {
         carritoVacio.style.display = 'block';
@@ -249,8 +253,8 @@ function actualizarCarrito(data) {
         data.items.forEach(item => {
             const itemElement = template.content.cloneNode(true);
             
-            itemElement.querySelector('.producto-nombre').textContent = item.producto_nombre;
-            itemElement.querySelector('.sucursal-nombre').textContent = item.sucursal_nombre;
+            itemElement.querySelector('.producto-nombre').textContent = item.nombre_producto;
+            itemElement.querySelector('.sucursal-nombre').textContent = item.nombre_sucursal;
             itemElement.querySelector('.precio-total').textContent = 
                 `$${item.subtotal.toLocaleString()} (${item.cantidad} x $${item.precio_unitario.toLocaleString()})`;
             
@@ -265,6 +269,7 @@ function actualizarCarrito(data) {
         });
         
         totalCarrito.textContent = `$${data.total.toLocaleString()}`;
+        totalCarritoUSD.textContent = `USD $${data.total_usd.toFixed(2)}`;
     }
 }
 

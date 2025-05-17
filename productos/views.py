@@ -101,13 +101,13 @@ class ProductoViewSet(viewsets.ModelViewSet):
                 producto_sucursal.save()
 
                 # Notificar si el stock es bajo
-                if producto_sucursal.stock == 0:
+                if producto_sucursal.stock <= 5:
                     channel_layer = get_channel_layer()
                     async_to_sync(channel_layer.group_send)(
                         "stock_notifications",
                         {
                             "type": "stock_notification",
-                            "message": f"Stock Bajo en {producto_sucursal.sucursal.nombre} para {producto.nombre}"
+                            "message": f"¡Alerta! Stock bajo ({producto_sucursal.stock} unidades) en {producto_sucursal.sucursal.nombre} para {producto.nombre}"
                         }
                     )
 
@@ -153,46 +153,42 @@ class ProductoViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def actualizar_stock(self, request, pk=None):
-        producto = self.get_object()
-        sucursal_id = request.data.get('sucursal_id')
-        nuevo_stock = request.data.get('stock')
-
-        if not sucursal_id or nuevo_stock is None:
-            return Response(
-                {"error": "Debe especificar sucursal_id y stock"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
         try:
-            with transaction.atomic():
+            producto = self.get_object()
+            sucursal_id = request.data.get('sucursal_id')
+            nuevo_stock = request.data.get('stock')
+            
+            if nuevo_stock is None:
+                return Response({'error': 'Debe proporcionar el nuevo stock'}, status=400)
+            
+            if sucursal_id is None:
+                return Response({'error': 'Debe proporcionar el ID de la sucursal'}, status=400)
+            
+            try:
                 producto_sucursal = ProductoSucursal.objects.get(
                     producto=producto,
                     sucursal_id=sucursal_id
                 )
-                
-                producto_sucursal.stock = nuevo_stock
-                producto_sucursal.save()
+            except ProductoSucursal.DoesNotExist:
+                return Response({'error': 'No se encontró el producto en la sucursal especificada'}, status=404)
+            
+            producto_sucursal.stock = nuevo_stock
+            producto_sucursal.save()
 
-                # Notificar si el stock es bajo
-                if producto_sucursal.stock == 0:
-                    channel_layer = get_channel_layer()
-                    async_to_sync(channel_layer.group_send)(
-                        "stock_notifications",
-                        {
-                            "type": "stock_notification",
-                            "message": f"Stock Bajo en {producto_sucursal.sucursal.nombre} para {producto.nombre}"
-                        }
-                    )
+            # Notificar si el stock es bajo (menor o igual a 5)
+            if producto_sucursal.stock <= 5:
+                channel_layer = get_channel_layer()
+                async_to_sync(channel_layer.group_send)(
+                    "stock_notifications",
+                    {
+                        "type": "stock_notification",
+                        "message": f"¡Alerta! Stock bajo ({producto_sucursal.stock} unidades) en {producto_sucursal.sucursal.nombre} para {producto_sucursal.producto.nombre}"
+                    }
+                )
 
-                return Response({
-                    "mensaje": "Stock actualizado con éxito",
-                    "nuevo_stock": producto_sucursal.stock
-                })
-        except ProductoSucursal.DoesNotExist:
-            return Response(
-                {"error": "Sucursal no encontrada para este producto"},
-                status=status.HTTP_404_NOT_FOUND
-            )
+            return Response({'stock': producto_sucursal.stock})
+        except Exception as e:
+            return Response({'error': str(e)}, status=400)
 
 class SucursalViewSet(viewsets.ModelViewSet):
     queryset = Sucursal.objects.all()
@@ -337,13 +333,13 @@ class CarritoViewSet(viewsets.ModelViewSet):
                     producto_sucursal.save()
 
                     # Notificar si el stock es bajo
-                    if producto_sucursal.stock == 0:
+                    if producto_sucursal.stock <= 5:
                         channel_layer = get_channel_layer()
                         async_to_sync(channel_layer.group_send)(
                             "stock_notifications",
                             {
                                 "type": "stock_notification",
-                                "message": f"Stock Bajo en {producto_sucursal.sucursal.nombre} para {producto_sucursal.producto.nombre}"
+                                "message": f"¡Alerta! Stock bajo ({producto_sucursal.stock} unidades) en {producto_sucursal.sucursal.nombre} para {producto_sucursal.producto.nombre}"
                             }
                         )
                 
@@ -406,13 +402,13 @@ class CarritoViewSet(viewsets.ModelViewSet):
                         producto_sucursal.stock -= item.cantidad
                         producto_sucursal.save()
 
-                        if producto_sucursal.stock == 0:
+                        if producto_sucursal.stock <= 5:
                             channel_layer = get_channel_layer()
                             async_to_sync(channel_layer.group_send)(
                                 "stock_notifications",
                                 {
                                     "type": "stock_notification",
-                                    "message": f"Stock Bajo en {producto_sucursal.sucursal.nombre} para {producto_sucursal.producto.nombre}"
+                                    "message": f"¡Alerta! Stock bajo ({producto_sucursal.stock} unidades) en {producto_sucursal.sucursal.nombre} para {producto_sucursal.producto.nombre}"
                                 }
                             )
                     
@@ -590,13 +586,13 @@ def webpay_return(request):
                         producto_sucursal.stock -= item.cantidad
                         producto_sucursal.save()
 
-                        if producto_sucursal.stock == 0:
+                        if producto_sucursal.stock <= 5:
                             channel_layer = get_channel_layer()
                             async_to_sync(channel_layer.group_send)(
                                 "stock_notifications",
                                 {
                                     "type": "stock_notification",
-                                    "message": f"Stock Bajo en {producto_sucursal.sucursal.nombre} para {producto_sucursal.producto.nombre}"
+                                    "message": f"¡Alerta! Stock bajo ({producto_sucursal.stock} unidades) en {producto_sucursal.sucursal.nombre} para {producto_sucursal.producto.nombre}"
                                 }
                             )
                     

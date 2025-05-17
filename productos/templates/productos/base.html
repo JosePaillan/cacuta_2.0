@@ -119,36 +119,30 @@
             });
         }
 
-        // Configuración WebSocket
-        let wsScheme = window.location.protocol === "https:" ? "wss" : "ws";
-        let wsPath = `${wsScheme}://${window.location.host}/ws/stock/`;
-        
-        function connectWebSocket() {
-            const socket = new WebSocket(wsPath);
+        // Conexión WebSocket para notificaciones de stock
+        const connectWebSocket = () => {
+            const ws = new WebSocket(`ws://${window.location.host}/ws/stock/`);
             
-            socket.onopen = function() {
-                console.log("WebSocket conectado");
-            };
-            
-            socket.onmessage = function(e) {
+            ws.onmessage = function(e) {
                 const data = JSON.parse(e.data);
-                showNotification(data.message, 'warning');
+                if (data.type === 'stock_notification') {
+                    showNotification(data.message, 'warning');
+                }
             };
-            
-            socket.onclose = function() {
-                console.log("WebSocket desconectado, reconectando en 5 segundos...");
-                setTimeout(connectWebSocket, 5000);
-            };
-            
-            socket.onerror = function(error) {
-                console.error("Error en WebSocket:", error);
-            };
-        }
 
-        // Intentar conectar WebSocket solo si no estamos en la página de administración
-        if (!window.location.pathname.startsWith('/admin/')) {
-            connectWebSocket();
-        }
+            ws.onclose = function(e) {
+                console.log('WebSocket desconectado. Reconectando en 2 segundos...');
+                setTimeout(connectWebSocket, 2000);
+            };
+
+            ws.onerror = function(err) {
+                console.error('Error en WebSocket:', err);
+                ws.close();
+            };
+        };
+
+        // Iniciar conexión WebSocket cuando el documento esté listo
+        document.addEventListener('DOMContentLoaded', connectWebSocket);
     </script>
     {% block extra_js %}{% endblock %}
 </body>

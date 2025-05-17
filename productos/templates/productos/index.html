@@ -295,12 +295,5 @@ document.addEventListener('DOMContentLoaded', () => {
     cargarSucursales();
     cargarProductos();
 });
-
-// WebSocket para notificaciones de stock
-const ws = new WebSocket(`ws://${window.location.host}/ws/stock/`);
-ws.onmessage = function(e) {
-    const data = JSON.parse(e.data);
-    showNotification(data.message, 'warning');
-};
 </script>
 {% endblock %} 

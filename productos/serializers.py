@@ -1,5 +1,7 @@
 from rest_framework import serializers
 from .models import Producto, Sucursal, ProductoSucursal, Venta, ItemCarrito, CarritoCompra
+from .utils import get_usd_rate
+from decimal import Decimal
 
 class SucursalSerializer(serializers.ModelSerializer):
     class Meta:
@@ -60,8 +62,16 @@ class ItemCarritoSerializer(serializers.ModelSerializer):
 class CarritoSerializer(serializers.ModelSerializer):
     items = ItemCarritoSerializer(many=True, read_only=True)
     total = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
+    total_usd = serializers.SerializerMethodField()
 
     class Meta:
         model = CarritoCompra
-        fields = ['id', 'usuario', 'fecha_creacion', 'completado', 'items', 'total']
-        read_only_fields = ['fecha_creacion', 'completado'] 
+        fields = ['id', 'usuario', 'fecha_creacion', 'completado', 'items', 'total', 'total_usd']
+        read_only_fields = ['fecha_creacion', 'completado']
+
+    def get_total_usd(self, obj):
+        if not obj.total:
+            return Decimal('0.00')
+        usd_rate = get_usd_rate()
+        total_decimal = Decimal(str(obj.total))
+        return round(total_decimal * usd_rate, 2) 
