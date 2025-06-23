@@ -1,3 +1,4 @@
+from productos import grpc
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -16,6 +17,7 @@ from django.views.decorators.csrf import csrf_exempt
 
 from .models import Producto, Sucursal, Stock, CarritoCompra, ItemCarrito, Venta
 from .serializers import ProductoSerializer, VentaSerializer, SucursalSerializer, StockSerializer, CarritoSerializer, ItemCarritoSerializer
+from productos.grpc.clientes import crear_producto_en_sucursal
 
 # Configuración de Transbank para ambiente de integración
 webpay_options = WebpayOptions(
@@ -25,10 +27,59 @@ webpay_options = WebpayOptions(
 )
 tx = Transaction(options=webpay_options)
 
+    
 class ProductoViewSet(viewsets.ModelViewSet):
     queryset = Producto.objects.all()
     serializer_class = ProductoSerializer
 
+    @action(detail=False, methods=['post'])
+    def crear_en_sucursales(self, request):
+        data = request.data
+        nombre = data.get('nombre')
+        descripcion = data.get('descripcion')
+        categoria = data.get('categoria')
+        precios = data.get('precios')  # dict con host: precio
+
+        if not all([nombre, descripcion, categoria, precios]):
+            return Response({'error': 'Faltan campos requeridos'}, status=400)
+
+        try:
+            # 1. Crear producto en la matriz
+            producto_matriz = Producto.objects.create(
+                nombre=nombre,
+                descripcion=descripcion,
+                categoria=categoria,
+                precio_base=list(precios.values())[0]  # Precio cualquiera, por compatibilidad
+            )
+        except Exception as e:
+            return Response({'error': f'Error al guardar en la matriz: {str(e)}'}, status=500)
+
+        resultados = {}
+
+        # 2. Crear en sucursales vía gRPC
+        for host, precio in precios.items():
+            try:
+                result = crear_producto_en_sucursal(
+                    nombre=nombre,
+                    descripcion=descripcion,
+                    categoria=categoria,
+                    precio_base=precio,
+                    host=host
+                )
+                resultados[host] = {
+                    'id': result.id,
+                    'nombre': result.nombre,
+                    'precio': result.precio_base
+                }
+            except grpc.RpcError as e:
+                resultados[host] = {'error': f'gRPC error: {e.details()}'}
+
+        return Response({
+            'mensaje': 'Producto creado en matriz y sucursales',
+            'producto_matriz_id': producto_matriz.id,
+            'sucursales': resultados
+        })
+    
     def get_queryset(self):
         queryset = Producto.objects.all()
         nombre = self.request.query_params.get('nombre', None)
@@ -36,6 +87,8 @@ class ProductoViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(nombre__icontains=nombre)
         return queryset
 
+    
+    
     @action(detail=True, methods=['get'])
     def stock_sucursal(self, request, pk=None):
         producto = self.get_object()

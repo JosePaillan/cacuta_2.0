@@ -1,0 +1,42 @@
+syntax = "proto3";
+
+package productos;
+
+message ProductoRequest {
+    int32 id = 1;
+}
+
+message ProductoCreateRequest {
+    string nombre = 1;
+    string descripcion = 2;
+    string categoria = 3;
+    double precio_base = 4;
+}
+
+message ProductoUpdateRequest {
+    int32 id = 1;
+    string nombre = 2;
+    string descripcion = 3;
+    string categoria = 4;
+    double precio_base = 5;
+}
+
+message ProductoResponse {
+    int32 id = 1;
+    string nombre = 2;
+    string descripcion = 3;
+    string categoria = 4;
+    double precio_base = 5;
+    string fecha_creacion = 6;
+    string fecha_actualizacion = 7;
+}
+
+message Empty {}
+
+service ProductoService {
+    rpc ListarProductos (Empty) returns (stream ProductoResponse);
+    rpc ObtenerProducto (ProductoRequest) returns (ProductoResponse);
+    rpc CrearProducto (ProductoCreateRequest) returns (ProductoResponse);
+    rpc ActualizarProducto (ProductoUpdateRequest) returns (ProductoResponse);
+    rpc EliminarProducto (ProductoRequest) returns (Empty);
+}

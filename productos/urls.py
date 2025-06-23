@@ -13,6 +13,8 @@ router.register(r'carritos', views.CarritoViewSet)
 urlpatterns = [
     path('api/', include(router.urls)),
     path('', TemplateView.as_view(template_name='productos/index.html'), name='lista_productos'),
+    path('crear/', TemplateView.as_view(template_name='productos/crear_producto.html'), name='crear_producto'),
+
     path('carrito/', TemplateView.as_view(template_name='productos/carrito.html'), name='carrito'),
     path('webpay/return/', views.webpay_return, name='webpay_return'),
 ] 

@@ -11,7 +11,6 @@ class Command(BaseCommand):
             {'nombre': 'Casa Matriz Central', 'direccion': 'Av. Principal 123'},
             {'nombre': 'Sucursal Norte', 'direccion': 'Calle Norte 456'},
             {'nombre': 'Sucursal Sur', 'direccion': 'Av. Sur 789'},
-            {'nombre': 'Casa Matriz Este', 'direccion': 'Boulevard Este 321'},
             {'nombre': 'Sucursal Oeste', 'direccion': 'Calle Oeste 654'}
         ]
 
