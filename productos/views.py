@@ -8,6 +8,7 @@ from asgiref.sync import async_to_sync
 from django.db import transaction
 from django.core.exceptions import ValidationError
 import requests
+import grpc
 from decimal import Decimal
 from transbank.webpay.webpay_plus.transaction import Transaction, WebpayOptions
 from transbank.common.integration_type import IntegrationType
@@ -18,7 +19,7 @@ from django.views.decorators.csrf import csrf_exempt
 from .models import Producto, Sucursal, Stock, CarritoCompra, ItemCarrito, Venta
 from .serializers import ProductoSerializer, VentaSerializer, SucursalSerializer, StockSerializer, CarritoSerializer, ItemCarritoSerializer
 from productos.grpc.clientes import crear_producto_en_sucursal
-
+from collections import defaultdict
 # Configuración de Transbank para ambiente de integración
 webpay_options = WebpayOptions(
     commerce_code="597055555532",
@@ -34,15 +35,20 @@ class ProductoViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['post'])
     def crear_en_sucursales(self, request):
-        data = request.data
-        nombre = data.get('nombre')
-        descripcion = data.get('descripcion')
-        categoria = data.get('categoria')
-        precios = data.get('precios')  # dict con host: precio
+        nombre = request.POST.get('nombre')
+        descripcion = request.POST.get('descripcion')
+        categoria = request.POST.get('categoria')
+        precio_matriz = request.POST.get('precio_matriz')
+        precios = {}
 
-        if not all([nombre, descripcion, categoria, precios]):
+        # Extraer precios[host] desde POST
+        for key, value in request.POST.lists():
+            if key.startswith('precios[') and key.endswith(']'):
+                host = key[8:-1]  # Extrae el host de precios[host]
+                precios[host] = value[0]
+
+        if not all([nombre, descripcion, categoria, precio_matriz]) or not precios:
             return Response({'error': 'Faltan campos requeridos'}, status=400)
-
         try:
             # 1. Crear producto en la matriz
             producto_matriz = Producto.objects.create(
