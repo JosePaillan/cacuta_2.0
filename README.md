@@ -106,7 +106,7 @@ CREATE DATABASE sucursal_3;
 
 - Usuario recomendado: `postgres`
 - Contraseña recomendada: `admin`
-- Puedes cambiar estos valores en los settings si lo necesitas.
+- Puedes cambiar estos valores en los settings y en el app de cada sucursal si lo necesitas.
 
 ### b) Configura el usuario y contraseña en tu PostgreSQL si es necesario.
 
@@ -140,13 +140,7 @@ Esto lanzará:
 - Sucursal 2 en `localhost:50053`
 - Sucursal 3 en `localhost:50054`
 
-También puedes iniciar cada servidor manualmente:
 
-```bash
-python Api_Flask/Sucursal_1/server.py
-python Api_Flask/Sucursal_2/server.py
-python Api_Flask/Sucursal_3/server.py
-```
 
 ## 7. Configurar los hosts de las sucursales en Django
 
@@ -163,25 +157,6 @@ Esto asociará los nombres de sucursal con sus puertos gRPC.
 ```bash
 daphne -b 0.0.0.0 -p 8000 stock_manager.asgi:application
 ```
-O si prefieres para desarrollo:
-```bash
-python manage.py runserver
-```
-
-## 9. Cargar datos de prueba (opcional)
-
-Puedes usar los scripts de la carpeta `productos/management/commands/` para cargar productos, agregar stock, limpiar datos, etc.
-
-Ejemplo:
-```bash
-python manage.py cargar_datos
-python manage.py agregar_stock_grpc
-```
-
-## 10. Acceso y pruebas
-
-- Accede a la app en: [http://localhost:8000/](http://localhost:8000/)
-- El admin de Django está disponible en `/admin` (crea un superusuario con `python manage.py createsuperuser`).
 
 ---
 
