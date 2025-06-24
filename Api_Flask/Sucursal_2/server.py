@@ -6,7 +6,6 @@ from productos_pb2_grpc import add_ProductoServiceServicer_to_server, ProductoSe
 from app import SessionLocal
 from models import Producto
 from datetime import datetime
-
 class ProductoService(ProductoServiceServicer):
     def ListarProductos(self, request, context):
         db = SessionLocal()
@@ -18,6 +17,7 @@ class ProductoService(ProductoServiceServicer):
                 descripcion=p.descripcion,
                 categoria=p.categoria,
                 precio_base=p.precio_base,
+                stock=p.stock,
                 fecha_creacion=p.fecha_creacion.isoformat(),
                 fecha_actualizacion=p.fecha_actualizacion.isoformat()
             )
@@ -29,6 +29,7 @@ class ProductoService(ProductoServiceServicer):
             descripcion=request.descripcion,
             categoria=request.categoria,
             precio_base=request.precio_base,
+            stock=request.stock,
         )
         db.add(producto)
         db.commit()
@@ -40,6 +41,7 @@ class ProductoService(ProductoServiceServicer):
             descripcion=producto.descripcion,
             categoria=producto.categoria,
             precio_base=producto.precio_base,
+            stock=producto.stock,
             fecha_creacion=producto.fecha_creacion.isoformat(),
             fecha_actualizacion=producto.fecha_actualizacion.isoformat()
         )
@@ -53,6 +55,7 @@ class ProductoService(ProductoServiceServicer):
             descripcion=producto.descripcion,
             categoria=producto.categoria,
             precio_base=producto.precio_base,
+            stock=producto.stock,
             fecha_creacion=producto.fecha_creacion.isoformat(),
             fecha_actualizacion=producto.fecha_actualizacion.isoformat()
         )
@@ -64,6 +67,7 @@ class ProductoService(ProductoServiceServicer):
         producto.descripcion = request.descripcion
         producto.categoria = request.categoria
         producto.precio_base = request.precio_base
+        producto.stock = request.stock
         producto.fecha_actualizacion = datetime.utcnow()
         db.commit()
         return ProductoResponse(
@@ -72,6 +76,7 @@ class ProductoService(ProductoServiceServicer):
             descripcion=producto.descripcion,
             categoria=producto.categoria,
             precio_base=producto.precio_base,
+            stock=producto.stock,
             fecha_creacion=producto.fecha_creacion.isoformat(),
             fecha_actualizacion=producto.fecha_actualizacion.isoformat()
         )

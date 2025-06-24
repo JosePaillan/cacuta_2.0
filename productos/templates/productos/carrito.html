@@ -156,11 +156,20 @@ async function cargarSucursales() {
         const sucursalSelect = document.getElementById('sucursalSelect');
         sucursalSelect.innerHTML = '<option value="">Seleccione una sucursal</option>';
         
+        // Agregar opción "Local" al inicio
+        const localOption = document.createElement('option');
+        localOption.value = 'local';
+        localOption.textContent = '🏠 Local (Matriz)';
+        sucursalSelect.appendChild(localOption);
+        
+        // Agregar sucursales gRPC
         data.forEach(sucursal => {
-            const option = document.createElement('option');
-            option.value = sucursal.id;
-            option.textContent = sucursal.nombre;
-            sucursalSelect.appendChild(option);
+            if (sucursal.host) { // Solo sucursales con host configurado
+                const option = document.createElement('option');
+                option.value = sucursal.id;
+                option.textContent = `🏪 ${sucursal.nombre}`;
+                sucursalSelect.appendChild(option);
+            }
         });
     } catch (error) {
         console.error('Error al cargar sucursales:', error);
@@ -170,29 +179,80 @@ async function cargarSucursales() {
 
 async function cargarProductosSucursal(sucursalId) {
     try {
-        const response = await fetch('/api/productos/');
+        console.log('🔄 Cargando productos para sucursal:', sucursalId);
+        
+        const response = await fetch('/api/productos/todos_los_productos/');
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
         const data = await response.json();
+        console.log('📦 Datos recibidos:', data);
         
         const productoSelect = document.getElementById('productoSelect');
         productoSelect.innerHTML = '<option value="">Seleccione un producto</option>';
         productoSelect.disabled = false;
         
-        data.forEach(producto => {
-            const stock = producto.stocks.find(s => s.sucursal == sucursalId);
-            if (stock && stock.cantidad > 0) {
-                const option = document.createElement('option');
-                option.value = stock.id;
-                option.textContent = `${producto.nombre} - $${stock.precio.toLocaleString()}`;
-                productoSelect.appendChild(option);
-                stockInfo[stock.id] = {
-                    producto_id: producto.id,
-                    sucursal_id: sucursalId,
-                    cantidad_disponible: stock.cantidad
-                };
-            }
-        });
+        // Limpiar stockInfo
+        stockInfo = {};
+        
+        // Procesar productos locales (sucursalId = null significa local)
+        if (sucursalId === 'local') {
+            console.log('🏠 Procesando productos locales:', data.locales?.length || 0);
+            data.locales?.forEach(producto => {
+                console.log('  - Producto local:', producto.nombre, 'Stock:', producto.stock);
+                if (producto.stock > 0) {
+                    const option = document.createElement('option');
+                    option.value = `local-${producto.id}`;
+                    option.textContent = `${producto.nombre} - $${producto.precio_base.toLocaleString()} (Local)`;
+                    productoSelect.appendChild(option);
+                    stockInfo[`local-${producto.id}`] = {
+                        producto_id: producto.id,
+                        sucursal_id: null,
+                        cantidad_disponible: producto.stock,
+                        precio: producto.precio_base
+                    };
+                    console.log('    ✅ Agregado al selector');
+                } else {
+                    console.log('    ❌ Sin stock disponible');
+                }
+            });
+        } else {
+            console.log('🏪 Procesando productos de sucursal gRPC:', sucursalId);
+            console.log('   Productos disponibles:', data.sucursales?.length || 0);
+            data.sucursales?.forEach(producto => {
+                console.log('  - Producto:', producto.nombre, 'Sucursal:', producto.sucursal, 'Stock:', producto.stock);
+                if (producto.sucursal == sucursalId && producto.stock > 0) {
+                    const option = document.createElement('option');
+                    option.value = `${producto.sucursal}-${producto.id}`;
+                    option.textContent = `${producto.nombre} - $${producto.precio_base.toLocaleString()} (${producto.nombre_sucursal})`;
+                    productoSelect.appendChild(option);
+                    stockInfo[`${producto.sucursal}-${producto.id}`] = {
+                        producto_id: producto.id,
+                        sucursal_id: producto.sucursal,
+                        cantidad_disponible: producto.stock,
+                        precio: producto.precio_base
+                    };
+                    console.log('    ✅ Agregado al selector');
+                } else {
+                    console.log('    ❌ No coincide con sucursal o sin stock');
+                }
+            });
+        }
+        
+        console.log('📋 Productos en selector:', productoSelect.children.length - 1);
+        console.log('💾 StockInfo:', stockInfo);
+        
+        // Si no hay productos disponibles
+        if (productoSelect.children.length === 1) {
+            productoSelect.innerHTML = '<option value="">No hay productos disponibles</option>';
+            productoSelect.disabled = true;
+            console.log('⚠️ No hay productos disponibles');
+        }
+        
     } catch (error) {
-        console.error('Error al cargar productos:', error);
+        console.error('❌ Error al cargar productos:', error);
         showNotification('Error al cargar los productos', 'danger');
     }
 }
