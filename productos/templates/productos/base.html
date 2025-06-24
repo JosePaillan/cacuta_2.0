@@ -53,6 +53,21 @@
                             <i class="fas fa-shopping-cart me-1"></i>Carrito
                         </a>
                     </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'productos:crear_producto' %}">
+                            <i class="fas fa-shopping-cart me-1"></i>Crear Producto
+                        </a>
+                    </li>
+                </ul>
+                <ul class="navbar-nav">
+                    <li class="nav-item">
+                        <button id="alertasBtn" class="btn btn-outline-light btn-sm position-relative">
+                            <i class="fas fa-exclamation-triangle me-1"></i>Alertas
+                            <span id="alertasBadge" class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" style="display: none;">
+                                0
+                            </span>
+                        </button>
+                    </li>
                 </ul>
             </div>
         </div>
@@ -62,16 +77,26 @@
         {% block content %}{% endblock %}
     </div>
 
+    <!-- Panel de Alertas de Stock -->
+    <div class="position-fixed top-0 end-0 p-3" style="z-index: 1050;">
+        <div id="alertasPanel" class="card shadow" style="width: 400px; max-height: 500px; overflow-y: auto; display: none;">
+            <div class="card-header bg-warning text-dark d-flex justify-content-between align-items-center">
+                <h6 class="mb-0">
+                    <i class="fas fa-exclamation-triangle me-2"></i>Alertas de Stock
+                </h6>
+                <button type="button" class="btn-close" onclick="toggleAlertasPanel()"></button>
+            </div>
+            <div class="card-body p-0">
+                <div id="alertasLista" class="list-group list-group-flush">
+                    <!-- Las alertas se cargarán aquí dinámicamente -->
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Toast para notificaciones -->
     <div class="toast-container">
-        <div id="notificationToast" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
-            <div class="toast-header bg-warning text-dark">
-                <i class="fas fa-exclamation-triangle me-2"></i>
-                <strong class="me-auto">Notificación</strong>
-                <button type="button" class="btn-close" data-bs-dismiss="toast"></button>
-            </div>
-            <div class="toast-body"></div>
-        </div>
+        <!-- Las notificaciones se crearán dinámicamente aquí -->
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
@@ -119,30 +144,80 @@
             });
         }
 
-        // Conexión WebSocket para notificaciones de stock
-        const connectWebSocket = () => {
-            const ws = new WebSocket(`ws://${window.location.host}/ws/stock/`);
-            
-            ws.onmessage = function(e) {
-                const data = JSON.parse(e.data);
-                if (data.type === 'stock_notification') {
-                    showNotification(data.message, 'warning');
+        // --- SSE para alertas de stock ---
+        window.alertas = window.alertas || [];
+        let alertasPanelVisible = false;
+
+        function renderAlertas() {
+            const lista = document.getElementById('alertasLista');
+            lista.innerHTML = '';
+            if (window.alertas.length === 0) {
+                lista.innerHTML = '<div class="list-group-item text-center text-muted">No hay alertas activas</div>';
+            } else {
+                window.alertas.forEach(alerta => {
+                    const item = document.createElement('div');
+                    item.className = 'list-group-item d-flex justify-content-between align-items-center';
+                    item.innerHTML = `
+                        <div>
+                            <strong>${alerta.producto}</strong><br>
+                            <span class="badge bg-warning text-dark">${alerta.sucursal}</span>
+                            <span class="ms-2">Stock: <strong>${alerta.stock_actual}</strong> (Umbral: ${alerta.umbral})</span><br>
+                            <small class="text-muted">${alerta.mensaje}</small>
+                        </div>
+                        <span class="badge bg-danger">${alerta.tipo}</span>
+                    `;
+                    lista.appendChild(item);
+                });
+            }
+            // Actualizar badge
+            const badge = document.getElementById('alertasBadge');
+            if (window.alertas.length > 0) {
+                badge.textContent = window.alertas.length;
+                badge.style.display = 'inline-block';
+            } else {
+                badge.style.display = 'none';
+            }
+        }
+
+        function toggleAlertasPanel() {
+            alertasPanelVisible = !alertasPanelVisible;
+            document.getElementById('alertasPanel').style.display = alertasPanelVisible ? 'block' : 'none';
+        }
+        document.getElementById('alertasBtn').addEventListener('click', toggleAlertasPanel);
+
+        // Conexión SSE
+        if (!!window.EventSource) {
+            const evtSource = new EventSource('/api/alertas/sse/');
+            evtSource.onmessage = function(e) {
+                try {
+                    // El backend envía un objeto JS como string, lo parseamos
+                    let alerta = e.data.replace(/'/g, '"'); // Comillas simples a dobles
+                    alerta = JSON.parse(alerta);
+                    // Evitar duplicados
+                    if (!window.alertas.some(a => a.id === alerta.id)) {
+                        window.alertas.unshift(alerta);
+                        renderAlertas();
+                        showNotification(alerta.mensaje, 'warning');
+                    }
+                } catch (err) {
+                    // Puede ser un array de alertas al inicio
+                    try {
+                        let alertasArr = JSON.parse(e.data);
+                        if (Array.isArray(alertasArr)) {
+                            window.alertas = alertasArr;
+                            renderAlertas();
+                        }
+                    } catch (e2) {
+                        // Ignorar
+                    }
                 }
             };
-
-            ws.onclose = function(e) {
-                console.log('WebSocket desconectado. Reconectando en 2 segundos...');
-                setTimeout(connectWebSocket, 2000);
+            evtSource.onerror = function(e) {
+                showNotification('Error de conexión con el servidor de alertas', 'danger');
             };
-
-            ws.onerror = function(err) {
-                console.error('Error en WebSocket:', err);
-                ws.close();
-            };
-        };
-
-        // Iniciar conexión WebSocket cuando el documento esté listo
-        document.addEventListener('DOMContentLoaded', connectWebSocket);
+        } else {
+            showNotification('Tu navegador no soporta notificaciones en tiempo real (SSE)', 'danger');
+        }
     </script>
     {% block extra_js %}{% endblock %}
 </body>

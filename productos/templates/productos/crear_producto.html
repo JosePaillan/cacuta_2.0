@@ -1,34 +1,103 @@
 {% extends 'productos/base.html' %}
 
 {% block content %}
-<h2>Crear producto en matriz y sucursales</h2>
+<div class="container">
+    <div class="row">
+        <div class="col-md-8 offset-md-2">
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white">
+                    <h3 class="mb-0">
+                        <i class="fas fa-plus-circle me-2"></i>Crear Producto en Sucursales
+                    </h3>
+                </div>
+                <div class="card-body">
+                    <form method="post" action="{% url 'productos:producto-crear-en-sucursales' %}">
+                        {% csrf_token %}
+                        
+                        <div class="mb-3">
+                            <label for="nombre" class="form-label">Nombre del Producto:</label>
+                            <input type="text" class="form-control" id="nombre" name="nombre" required>
+                        </div>
 
-<form method="post" action="{% url 'productos:producto-crear-en-sucursales' %}">
+                        <div class="mb-3">
+                            <label for="descripcion" class="form-label">Descripción:</label>
+                            <textarea class="form-control" id="descripcion" name="descripcion" rows="3" required></textarea>
+                        </div>
 
-    {% csrf_token %}
-    <label>Nombre:</label><br>
-    <input type="text" name="nombre" required><br><br>
+                        <div class="mb-3">
+                            <label for="categoria" class="form-label">Categoría:</label>
+                            <input type="text" class="form-control" id="categoria" name="categoria" required>
+                        </div>
 
-    <label>Descripción:</label><br>
-    <textarea name="descripcion" required></textarea><br><br>
+                        <div class="mb-3">
+                            <label for="precio_matriz" class="form-label">Precio Base (Referencia):</label>
+                            <input type="number" step="0.01" class="form-control" id="precio_matriz" name="precio_matriz" required>
+                        </div>
 
-    <label>Categoría:</label><br>
-    <input type="text" name="categoria" required><br><br>
+                        <div class="mb-3">
+                            <label for="stock_matriz" class="form-label">Stock Inicial (Referencia):</label>
+                            <input type="number" min="0" class="form-control" id="stock_matriz" name="stock_matriz" value="0" required>
+                        </div>
 
-    <label>Precio base (matriz):</label><br>
-    <input type="number" step="0.01" name="precio_matriz" required><br><br>
+                        <hr>
+                        <h5 class="text-primary">
+                            <i class="fas fa-store me-2"></i>Precios y Stock por Sucursal
+                        </h5>
 
-    <h4>Precios por sucursal</h4>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="precio_norte" class="form-label">Sucursal Norte (localhost:50052):</label>
+                                    <input type="number" step="0.01" class="form-control" id="precio_norte" name="precios[localhost:50052]" required>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="stock_norte" class="form-label">Stock Sucursal Norte:</label>
+                                    <input type="number" min="0" class="form-control" id="stock_norte" name="stocks[localhost:50052]" value="0" required>
+                                </div>
+                            </div>
+                        </div>
 
-    <label>Precio sucursal 1 (localhost:50051):</label><br>
-    <input type="number" step="0.01" name="precios[localhost:50051]" required><br><br>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="precio_sur" class="form-label">Sucursal Sur (localhost:50053):</label>
+                                    <input type="number" step="0.01" class="form-control" id="precio_sur" name="precios[localhost:50053]" required>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="stock_sur" class="form-label">Stock Sucursal Sur:</label>
+                                    <input type="number" min="0" class="form-control" id="stock_sur" name="stocks[localhost:50053]" value="0" required>
+                                </div>
+                            </div>
+                        </div>
 
-    <label>Precio sucursal 2 (localhost:50053):</label><br>
-    <input type="number" step="0.01" name="precios[localhost:50053]" required><br><br>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="precio_oeste" class="form-label">Sucursal Oeste (localhost:50054):</label>
+                                    <input type="number" step="0.01" class="form-control" id="precio_oeste" name="precios[localhost:50054]" required>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="stock_oeste" class="form-label">Stock Sucursal Oeste:</label>
+                                    <input type="number" min="0" class="form-control" id="stock_oeste" name="stocks[localhost:50054]" value="0" required>
+                                </div>
+                            </div>
+                        </div>
 
-    <label>Precio sucursal 3 (localhost:50054):</label><br>
-    <input type="number" step="0.01" name="precios[localhost:50054]" required><br><br>
-
-    <button type="submit">Crear Producto</button>
-</form>
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-primary btn-lg">
+                                <i class="fas fa-save me-2"></i>Crear Producto en Sucursales
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}

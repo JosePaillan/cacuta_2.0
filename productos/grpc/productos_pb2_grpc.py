@@ -27,7 +27,8 @@ if _version_not_supported:
 
 
 class ProductoServiceStub(object):
-    """Missing associated documentation comment in .proto file."""
+    """Servicio gRPC de productos
+    """
 
     def __init__(self, channel):
         """Constructor.
@@ -63,7 +64,8 @@ class ProductoServiceStub(object):
 
 
 class ProductoServiceServicer(object):
-    """Missing associated documentation comment in .proto file."""
+    """Servicio gRPC de productos
+    """
 
     def ListarProductos(self, request, context):
         """Missing associated documentation comment in .proto file."""
@@ -132,7 +134,8 @@ def add_ProductoServiceServicer_to_server(servicer, server):
 
  # This class is part of an EXPERIMENTAL API.
 class ProductoService(object):
-    """Missing associated documentation comment in .proto file."""
+    """Servicio gRPC de productos
+    """
 
     @staticmethod
     def ListarProductos(request,

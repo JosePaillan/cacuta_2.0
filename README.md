@@ -1,180 +1,195 @@
-# Sistema de Gestión de Stock con Transbank
+# Sistema de Gestión de Stock Distribuido (Django + Flask/gRPC)
 
-Este es un sistema de gestión de stock con integración de pagos mediante Transbank WebPay Plus.
+## 1. Requisitos
 
-## Características
+- **Python 3.10+**
+- **PostgreSQL** (instalado y corriendo)
+- **pip** (gestor de paquetes de Python)
+- **git** (opcional, para clonar el repo)
 
-- Gestión de productos y stock por sucursal
-- Búsqueda de productos
-- Visualización de stock y precios por sucursal
-- Conversión de precios a USD
-- Notificaciones en tiempo real de stock bajo
-- API REST completa
-- Interfaz web responsive
+## 2. Instalación de dependencias
 
-## Requisitos Previos
+### a) Crear y activar entorno virtual
 
-- Python 3.8 o superior
-- pip (gestor de paquetes de Python)
-- Entorno virtual de Python (venv)
-- Windows 10 o superior
-
-## Pasos de Instalación
-
-1. **Clonar el Repositorio**
-   ```bash
-   git clone [URL_DEL_REPOSITORIO]
-   cd cacuta_2.0
-   ```
-
-2. **Crear y Activar el Entorno Virtual**
-   ```bash
-   python -m venv venv
-   .\venv\Scripts\activate
-   ```
-
-3. **Instalar Dependencias**
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-4. **Configurar la Base de Datos**
-   ```bash
-   python manage.py migrate
-   python manage.py createsuperuser
-   ```
-
-## Configuración de Transbank (Ambiente de Pruebas)
-
-1. **Credenciales de Prueba**
-   - Las credenciales ya están configuradas para el ambiente de integración
-   - No se requiere modificar nada para pruebas
-
-2. **Datos para Pruebas de Transbank**
-   - **Tarjeta de Crédito VISA**
-     - Número: `4051 8856 0044 6623`
-     - CVV: `123`
-     - Fecha de expiración: `Cualquier fecha futura`
-   
-   - **Datos de Autenticación**
-     - RUT: `11.111.111-1`
-     - Clave: `123`
-
-3. **Códigos de Respuesta**
-   - Para transacción **APROBADA**: usar cualquier monto
-   - Para transacción **RECHAZADA**: usar monto exacto de `1001`
-
-## Ejecutar la Aplicación
-
-1. **Iniciar el Servidor con Daphne**
-   ```bash
-   daphne -b 0.0.0.0 -p 8000 stock_manager.asgi:application
-   ```
-
-2. **Acceder a la Aplicación**
-   - Abrir el navegador y visitar: `http://localhost:8000`
-   - Panel de administración: `http://localhost:8000/admin`
-
-## Flujo de Uso
-
-1. **Gestión de Productos**
-   - Agregar productos desde el panel de administración
-   - Gestionar stock desde la interfaz principal
-   - Buscar productos por nombre
-
-2. **Proceso de Compra**
-   - Agregar productos al carrito
-   - Iniciar proceso de pago
-   - Completar pago con Transbank
-   - Verificar confirmación de la transacción
-
-3. **Notificaciones en Tiempo Real**
-   - El sistema incluye WebSockets para notificaciones de stock
-   - Las actualizaciones se muestran en tiempo real
-
-## Solución de Problemas
-
-1. **Error de Conexión a Transbank**
-   - Verificar conexión a internet
-   - Confirmar que se está usando el ambiente de integración
-
-2. **Problemas con WebSockets**
-   - Asegurarse de usar Daphne como servidor
-   - Verificar que no hay otro proceso usando el puerto 8000
-
-3. **Errores de Base de Datos**
-   - Ejecutar `python manage.py migrate` nuevamente
-   - Verificar permisos de escritura en el directorio
-
-## Detener la Aplicación
-
-1. **Método Normal**
-   - Presionar `Ctrl + C` en la terminal
-
-2. **Forzar Cierre**
-   ```bash
-   taskkill /F /IM daphne.exe
-   ```
-
-## Notas Importantes
-
-- El sistema está configurado para ambiente de pruebas de Transbank
-- No usar en producción sin cambiar las credenciales
-- Mantener actualizado el sistema y sus dependencias
-- Realizar copias de seguridad de la base de datos regularmente
-
-## Soporte
-
-Para soporte técnico o consultas, contactar a:
-[INFORMACIÓN_DE_CONTACTO]
-
-## API Endpoints
-
-- `GET /api/productos/`: Lista todos los productos
-- `GET /api/productos/?nombre=<búsqueda>`: Busca productos por nombre
-- `GET /api/productos/<id>/stock_sucursal/?sucursal=<nombre>`: Obtiene stock y precio de una sucursal
-- `GET /api/productos/<id>/precio_usd/?sucursal=<nombre>`: Obtiene precio en USD
-- `POST /api/productos/<id>/realizar_venta/`: Realiza una venta
-
-## WebSocket
-
-La aplicación utiliza WebSocket para notificaciones en tiempo real de stock bajo:
-```javascript
-const socket = new WebSocket('ws://localhost:8000/ws/stock/');
+```bash
+python -m venv .env
+# En Windows:
+.env\Scripts\activate
+# En Linux/Mac:
+source .env/bin/activate
 ```
 
-## Estructura del Proyecto
+### b) Instalar dependencias principales
 
-```
-stock_manager/
-├── manage.py
-├── requirements.txt
-├── stock_manager/
-│   ├── __init__.py
-│   ├── asgi.py
-│   ├── settings.py
-│   ├── urls.py
-│   ├── routing.py
-│   └── wsgi.py
-└── productos/
-    ├── __init__.py
-    ├── models.py
-    ├── views.py
-    ├── consumers.py
-    ├── serializers.py
-    └── templates/
-        └── productos/
-            └── index.html
+```bash
+pip install -r requirements.txt
 ```
 
-## Contribuir
+**Contenido de `requirements.txt`:**
+```
+asgiref==3.8.1
+attrs==25.3.0
+autobahn==24.4.2
+Automat==25.4.16
+blinker==1.9.0
+certifi==2025.6.15
+cffi==1.17.1
+channels==4.0.0
+charset-normalizer==3.4.2
+click==8.2.1
+colorama==0.4.6
+constantly==23.10.4
+cryptography==45.0.4
+daphne==4.2.0
+Django==4.2
+django-cors-headers==4.3.1
+djangorestframework==3.14.0
+Flask==3.1.1
+greenlet==3.2.3
+grpcio==1.73.0
+grpcio-tools==1.73.0
+hyperlink==21.0.0
+idna==3.10
+incremental==24.7.2
+itsdangerous==2.2.0
+Jinja2==3.1.6
+MarkupSafe==3.0.2
+marshmallow==3.26.1
+packaging==25.0
+protobuf==6.31.1
+psycopg2-binary==2.9.10
+pyasn1==0.6.1
+pyasn1_modules==0.4.2
+pycparser==2.22
+pyOpenSSL==25.1.0
+python-dotenv==1.0.1
+pytz==2025.2
+requests==2.31.0
+service-identity==24.2.0
+setuptools==80.9.0
+SQLAlchemy==2.0.41
+sqlparse==0.5.3
+transbank-sdk==6.0.0
+Twisted==25.5.0
+txaio==23.1.1
+typing_extensions==4.14.0
+tzdata==2025.2
+urllib3==2.5.0
+Werkzeug==3.1.3
+zope.interface==7.2
+```
 
-1. Fork el repositorio
-2. Crea una rama para tu feature (`git checkout -b feature/AmazingFeature`)
-3. Commit tus cambios (`git commit -m 'Add some AmazingFeature'`)
-4. Push a la rama (`git push origin feature/AmazingFeature`)
-5. Abre un Pull Request
+### c) Dependencias para servidores Flask/gRPC de sucursales
 
-## Licencia
+Cada sucursal tiene su propio `requirements.txt` (idéntico):
 
-Este proyecto está bajo la Licencia MIT. Ver el archivo `LICENSE` para más detalles. 
+```
+grpcio
+grpcio-tools
+Flask
+SQLAlchemy
+psycopg2-binary
+```
+
+## 3. Configuración de la base de datos
+
+### a) Crear las bases de datos en PostgreSQL
+
+Conéctate a PostgreSQL y ejecuta:
+
+```sql
+CREATE DATABASE cacuta_db;
+CREATE DATABASE sucursal_1;
+CREATE DATABASE sucursal_2;
+CREATE DATABASE sucursal_3;
+```
+
+- Usuario recomendado: `postgres`
+- Contraseña recomendada: `admin`
+- Puedes cambiar estos valores en los settings si lo necesitas.
+
+### b) Configura el usuario y contraseña en tu PostgreSQL si es necesario.
+
+## 4. Migraciones Django
+
+```bash
+python manage.py makemigrations
+python manage.py migrate
+```
+
+## 5. Compilar los archivos gRPC (si modificas productos.proto)
+
+Si cambias el archivo `productos.proto`, debes regenerar los archivos Python para gRPC:
+
+```bash
+python -m grpc_tools.protoc -I. --python_out=productos/grpc --grpc_python_out=productos/grpc productos.proto
+```
+
+Haz esto cada vez que cambies el archivo `.proto`.
+
+## 6. Iniciar los servidores gRPC de las sucursales
+
+Puedes iniciar todos los servidores de las sucursales automáticamente con:
+
+```bash
+python iniciar_servidores.py
+```
+
+Esto lanzará:
+- Sucursal 1 en `localhost:50052`
+- Sucursal 2 en `localhost:50053`
+- Sucursal 3 en `localhost:50054`
+
+También puedes iniciar cada servidor manualmente:
+
+```bash
+python Api_Flask/Sucursal_1/server.py
+python Api_Flask/Sucursal_2/server.py
+python Api_Flask/Sucursal_3/server.py
+```
+
+## 7. Configurar los hosts de las sucursales en Django
+
+Ejecuta el script para registrar los hosts de las sucursales en la base de datos Django:
+
+```bash
+python configurar_hosts.py
+```
+
+Esto asociará los nombres de sucursal con sus puertos gRPC.
+
+## 8. Iniciar el servidor principal Django/ASGI
+
+```bash
+daphne -b 0.0.0.0 -p 8000 stock_manager.asgi:application
+```
+O si prefieres para desarrollo:
+```bash
+python manage.py runserver
+```
+
+## 9. Cargar datos de prueba (opcional)
+
+Puedes usar los scripts de la carpeta `productos/management/commands/` para cargar productos, agregar stock, limpiar datos, etc.
+
+Ejemplo:
+```bash
+python manage.py cargar_datos
+python manage.py agregar_stock_grpc
+```
+
+## 10. Acceso y pruebas
+
+- Accede a la app en: [http://localhost:8000/](http://localhost:8000/)
+- El admin de Django está disponible en `/admin` (crea un superusuario con `python manage.py createsuperuser`).
+
+---
+
+**Notas:**
+- Si tienes problemas de conexión gRPC, asegúrate de que los puertos no estén ocupados y que los servidores estén corriendo.
+- Si cambias la estructura de la base de datos de las sucursales, revisa los scripts de migración y el archivo `productos.proto`.
+- Para detener los servidores de las sucursales, presiona `Ctrl+C` en la terminal donde ejecutaste `iniciar_servidores.py`.
+
+---
+
+¿Quieres que agregue alguna sección extra (por ejemplo, troubleshooting, comandos útiles, o explicación de la arquitectura)?

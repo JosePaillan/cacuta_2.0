@@ -2,37 +2,46 @@ syntax = "proto3";
 
 package productos;
 
+// Solicitud para obtener un producto por ID
 message ProductoRequest {
     int32 id = 1;
 }
 
+// Solicitud para crear un nuevo producto
 message ProductoCreateRequest {
     string nombre = 1;
     string descripcion = 2;
     string categoria = 3;
     double precio_base = 4;
+    int32 stock = 5; // nuevo campo: requerido
 }
 
+// Solicitud para actualizar un producto existente
 message ProductoUpdateRequest {
     int32 id = 1;
     string nombre = 2;
     string descripcion = 3;
     string categoria = 4;
     double precio_base = 5;
+    int32 stock = 6; // nuevo campo: ahora editable
 }
 
+// Respuesta con los datos de un producto
 message ProductoResponse {
     int32 id = 1;
     string nombre = 2;
     string descripcion = 3;
     string categoria = 4;
     double precio_base = 5;
-    string fecha_creacion = 6;
-    string fecha_actualizacion = 7;
+    int32 stock = 6; // nuevo campo en la respuesta
+    string fecha_creacion = 7;
+    string fecha_actualizacion = 8;
 }
 
+// Mensaje vacío para respuestas sin datos
 message Empty {}
 
+// Servicio gRPC de productos
 service ProductoService {
     rpc ListarProductos (Empty) returns (stream ProductoResponse);
     rpc ObtenerProducto (ProductoRequest) returns (ProductoResponse);

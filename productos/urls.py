@@ -17,4 +17,9 @@ urlpatterns = [
 
     path('carrito/', TemplateView.as_view(template_name='productos/carrito.html'), name='carrito'),
     path('webpay/return/', views.webpay_return, name='webpay_return'),
+    
+    # Endpoints para alertas de stock
+    path('api/alertas/sse/', views.sse_alertas_stock, name='sse_alertas_stock'),
+    path('api/alertas/', views.obtener_alertas, name='obtener_alertas'),
+    path('api/alertas/<int:alerta_id>/resolver/', views.marcar_alerta_resuelta, name='marcar_alerta_resuelta'),
 ] 

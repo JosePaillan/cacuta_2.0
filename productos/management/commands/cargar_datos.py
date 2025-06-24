@@ -1,5 +1,5 @@
 from django.core.management.base import BaseCommand
-from productos.models import Producto, Sucursal, Stock
+from productos.models import Producto, Sucursal
 import random
 
 class Command(BaseCommand):
@@ -66,14 +66,10 @@ class Command(BaseCommand):
             ]
         }
 
-        # Crear productos y stock
-        sucursales_obj = list(Sucursal.objects.all())
-
         for categoria, productos_list in productos.items():
             for producto_nombre in productos_list:
-                # Crear producto
                 precio_base = random.randint(5000, 500000)  # Precio base entre 5.000 y 500.000
-                producto, created = Producto.objects.get_or_create(
+                Producto.objects.get_or_create(
                     nombre=producto_nombre,
                     categoria=categoria,
                     defaults={
@@ -81,23 +77,5 @@ class Command(BaseCommand):
                         'precio_base': precio_base
                     }
                 )
-
-                # Crear stock para cada sucursal
-                for sucursal in sucursales_obj:
-                    # Variar precio por sucursal (±10% del precio base)
-                    variacion = random.uniform(0.9, 1.1)
-                    precio_sucursal = int(precio_base * variacion)
-                    
-                    # Stock aleatorio entre 10 y 100
-                    cantidad = random.randint(10, 100)
-                    
-                    Stock.objects.get_or_create(
-                        producto=producto,
-                        sucursal=sucursal,
-                        defaults={
-                            'cantidad': cantidad,
-                            'precio': precio_sucursal
-                        }
-                    )
 
         self.stdout.write(self.style.SUCCESS('Datos cargados exitosamente')) 
