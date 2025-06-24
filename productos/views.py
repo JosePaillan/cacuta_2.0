@@ -23,7 +23,7 @@ from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 from .models import Producto, Sucursal, CarritoCompra, ItemCarrito, Venta, AlertaStock
 from .serializers import ProductoSerializer, SucursalSerializer, CarritoSerializer, VentaSerializer
-from .grpc.clientes import listar_productos_en_sucursal, crear_producto_en_sucursal
+from .grpc.clientes import listar_productos_en_sucursal, crear_producto_en_sucursal, actualizar_producto_en_sucursal
 from .utils import get_usd_rate
 import json
 import grpc
@@ -31,6 +31,7 @@ from transbank.webpay.webpay_plus.transaction import Transaction
 from transbank.common.options import WebpayOptions
 from transbank.common.integration_type import IntegrationType
 from django.http import QueryDict
+from decimal import Decimal, InvalidOperation
 
 # Configurar Transbank
 
@@ -441,7 +442,8 @@ class ProductoViewSet(viewsets.ModelViewSet):
                     stock_actual = getattr(prod, 'stock', 0)
                     print(f"  - Producto: {prod.nombre} (ID: {prod.id}, Stock: {stock_actual})")
                     productos_sucursales.append({
-                        'id': f"{sucursal.id}-{prod.id}",
+                        'id': prod.id,
+                        'combo_id': f"{sucursal.id}-{prod.id}",
                         'nombre': prod.nombre,
                         'descripcion': prod.descripcion,
                         'categoria': prod.categoria,
@@ -478,17 +480,23 @@ class CarritoViewSet(viewsets.ModelViewSet):
     serializer_class = CarritoSerializer
 
     def create(self, request, *args, **kwargs):
-        # Buscar un carrito no completado existente
+        print("==== CREANDO CARRITO ====")
+        print("Request data:", request.data)
         carrito = CarritoCompra.objects.filter(
             usuario=request.data.get('usuario', 'anonymous'),
             completado=False
         ).first()
 
         if carrito:
+            print("Carrito existente:", carrito.id)
             serializer = self.get_serializer(carrito)
+            print("Serializer data:", serializer.data)
             return Response(serializer.data)
 
-        return super().create(request, *args, **kwargs)
+        print("Creando nuevo carrito...")
+        response = super().create(request, *args, **kwargs)
+        print("Nuevo carrito creado, response:", getattr(response, 'data', response))
+        return response
 
     @action(detail=True, methods=['post'])
     def agregar_item(self, request, pk=None):
@@ -513,13 +521,19 @@ class CarritoViewSet(viewsets.ModelViewSet):
                         status=status.HTTP_400_BAD_REQUEST
                     )
 
+                # Validar precio_unitario
+                try:
+                    precio_unitario = Decimal(producto.precio_base)
+                except (InvalidOperation, TypeError, ValueError):
+                    precio_unitario = Decimal('0.00')
+
                 # Para productos locales, crear item directamente
                 item, created = ItemCarrito.objects.get_or_create(
                     carrito=carrito,
                     producto=producto,
                     defaults={
                         'cantidad': cantidad,
-                        'precio_unitario': producto.precio_base
+                        'precio_unitario': precio_unitario
                     }
                 )
 
@@ -534,31 +548,29 @@ class CarritoViewSet(viewsets.ModelViewSet):
             else:
                 # Es un producto remoto - verificar stock en tiempo real
                 sucursal = Sucursal.objects.get(id=sucursal_id)
-                
-                # Obtener stock actual del servidor gRPC
                 try:
                     productos_grpc = listar_productos_en_sucursal(host=sucursal.host)
-                    
-                    # Buscar el producto específico
                     producto_grpc = None
                     for prod in productos_grpc:
                         if str(prod.id) == str(producto_id):
                             producto_grpc = prod
                             break
-                    
                     if not producto_grpc:
                         return Response(
                             {"error": "Producto no encontrado en la sucursal"},
                             status=status.HTTP_404_NOT_FOUND
                         )
-                    
                     stock_actual = getattr(producto_grpc, 'stock', 0)
                     if stock_actual < cantidad:
                         return Response(
                             {"error": f"Stock insuficiente. Disponible: {stock_actual}, Solicitado: {cantidad}"},
                             status=status.HTTP_400_BAD_REQUEST
                         )
-                    
+                    # Validar precio_unitario
+                    try:
+                        precio_unitario = Decimal(producto_grpc.precio_base)
+                    except (InvalidOperation, TypeError, ValueError):
+                        precio_unitario = Decimal('0.00')
                     # Agregar al carrito
                     item, created = ItemCarrito.objects.get_or_create(
                         carrito=carrito,
@@ -566,11 +578,10 @@ class CarritoViewSet(viewsets.ModelViewSet):
                         sucursal_id_remoto=sucursal_id,
                         defaults={
                             'cantidad': cantidad,
-                            'precio_unitario': producto_grpc.precio_base,
+                            'precio_unitario': precio_unitario,
                             'sucursal_nombre': sucursal.nombre
                         }
                     )
-
                     if not created:
                         item.cantidad += cantidad
                         if item.cantidad > stock_actual:
@@ -579,13 +590,11 @@ class CarritoViewSet(viewsets.ModelViewSet):
                                 status=status.HTTP_400_BAD_REQUEST
                             )
                         item.save()
-                        
                 except Exception as e:
                     return Response(
                         {"error": f"Error al verificar stock en sucursal: {str(e)}"},
                         status=status.HTTP_500_INTERNAL_SERVER_ERROR
                     )
-
             serializer = CarritoSerializer(carrito)
             return Response(serializer.data)
 
@@ -865,8 +874,29 @@ def webpay_return(request):
                                     es_local=True
                                 )
                             else:
-                                # Producto remoto - no actualizamos stock aquí (se hace en gRPC)
-                                # Solo creamos el registro de venta
+                                # Producto remoto - actualizar stock en la sucursal gRPC
+                                sucursal = Sucursal.objects.get(nombre=item.sucursal_nombre)
+                                productos_grpc = listar_productos_en_sucursal(host=sucursal.host)
+                                producto_grpc = None
+                                for prod in productos_grpc:
+                                    if str(prod.id) == str(item.producto_id_remoto):
+                                        producto_grpc = prod
+                                        break
+                                if producto_grpc:
+                                    nuevo_stock = getattr(producto_grpc, 'stock', 0) - item.cantidad
+                                    if nuevo_stock < 0:
+                                        nuevo_stock = 0
+                                    # Llamada gRPC para actualizar el stock remoto
+                                    actualizar_producto_en_sucursal(
+                                        id=producto_grpc.id,
+                                        nombre=producto_grpc.nombre,
+                                        descripcion=producto_grpc.descripcion,
+                                        categoria=producto_grpc.categoria,
+                                        precio_base=producto_grpc.precio_base,
+                                        stock=nuevo_stock,
+                                        host=sucursal.host
+                                    )
+                                # Crear venta (con sucursal para productos remotos)
                                 Venta.objects.create(
                                     producto=Producto.objects.get(id=1),  # Producto genérico
                                     cantidad=item.cantidad,
@@ -874,7 +904,7 @@ def webpay_return(request):
                                     total=item.subtotal,
                                     es_local=False,
                                     sucursal_nombre=item.sucursal_nombre
-                            )
+                                )
 
                         carrito.completado = True
                         carrito.save()

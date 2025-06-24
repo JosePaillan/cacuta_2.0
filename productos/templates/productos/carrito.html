@@ -228,8 +228,14 @@ async function cargarProductosSucursal(sucursalId) {
                     option.value = `${producto.sucursal}-${producto.id}`;
                     option.textContent = `${producto.nombre} - $${producto.precio_base.toLocaleString()} (${producto.nombre_sucursal})`;
                     productoSelect.appendChild(option);
+                    // Extraer id interno
+                    let idInterno = producto.id;
+                    if (typeof idInterno === 'string' && idInterno.includes('-')) {
+                        idInterno = idInterno.split('-')[1];
+                    }
+                    idInterno = parseInt(idInterno, 10);
                     stockInfo[`${producto.sucursal}-${producto.id}`] = {
-                        producto_id: producto.id,
+                        producto_id: idInterno, // <-- id interno numérico
                         sucursal_id: producto.sucursal,
                         cantidad_disponible: producto.stock,
                         precio: producto.precio_base

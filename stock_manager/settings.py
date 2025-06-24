@@ -62,7 +62,7 @@ DATABASES = {
         'ENGINE': 'django.db.backends.postgresql',
         'NAME': 'cacuta_db',
         'USER': 'postgres',
-        'PASSWORD': 'admin',
+        'PASSWORD': 'duoc',
         'HOST': 'localhost',
         'PORT': '5432',
     }
