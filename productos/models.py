@@ -26,7 +26,7 @@ class AlertaStock(models.Model):
     ]
     
     producto = models.ForeignKey(Producto, on_delete=models.CASCADE, related_name='alertas')
-    sucursal_nombre = models.CharField(max_length=100, blank=True, help_text="Nombre de la sucursal gRPC (opcional)")
+    sucursal_nombre = models.CharField(null=True,max_length=100, blank=True, help_text="Nombre de la sucursal gRPC (opcional)")
     tipo = models.CharField(max_length=20, choices=TIPO_CHOICES, default='bajo')
     mensaje = models.TextField()
     stock_actual = models.IntegerField()
@@ -59,13 +59,17 @@ class Sucursal(models.Model):
         return self.nombre
 
 class Venta(models.Model):
-    producto = models.ForeignKey(Producto, on_delete=models.CASCADE)
+    producto = models.ForeignKey(Producto, on_delete=models.CASCADE, null=True, blank=True)
     cantidad = models.IntegerField()
     precio_unitario = models.DecimalField(max_digits=10, decimal_places=2)
     total = models.DecimalField(max_digits=10, decimal_places=2)
     fecha_venta = models.DateTimeField(default=timezone.now)
     es_local = models.BooleanField(default=True, help_text="True si es venta local, False si es de gRPC")
     sucursal_nombre = models.CharField(max_length=100, blank=True, help_text="Nombre de la sucursal gRPC (si no es local)")
+    producto_id_remoto = models.IntegerField(null=True, blank=True, help_text="ID del producto en servidor gRPC")
+    producto_nombre_remoto = models.CharField(max_length=200, blank=True, help_text="Nombre del producto remoto")
+    producto_descripcion_remoto = models.TextField(blank=True, help_text="Descripción del producto remoto")
+    producto_categoria_remoto = models.CharField(max_length=100, blank=True, help_text="Categoría del producto remoto")
 
     def save(self, *args, **kwargs):
         if not self.total:
@@ -74,9 +78,9 @@ class Venta(models.Model):
 
     def __str__(self):
         if self.es_local:
-            return f"Venta {self.id} - {self.producto.nombre} (Local)"
+            return f"Venta {self.id} - {self.producto.nombre if self.producto else 'Sin producto'} (Local)"
         else:
-            return f"Venta {self.id} - {self.producto.nombre} ({self.sucursal_nombre})"
+            return f"Venta {self.id} - {self.producto_nombre_remoto or 'Remoto'} ({self.sucursal_nombre})"
 
 class CarritoCompra(models.Model):
     usuario = models.CharField(max_length=100)

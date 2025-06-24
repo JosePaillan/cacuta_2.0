@@ -270,6 +270,12 @@ async function cargarSucursales() {
         const select = document.getElementById('sucursalSelect');
         select.innerHTML = '<option value="">Todas las sucursales</option>';
         
+        // Agregar opción Local
+        const localOption = document.createElement('option');
+        localOption.value = 'local';
+        localOption.textContent = 'Local';
+        select.appendChild(localOption);
+        
         data.forEach(sucursal => {
             const option = document.createElement('option');
             option.value = sucursal.id;

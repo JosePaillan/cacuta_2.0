@@ -20,7 +20,7 @@ from django.template.loader import render_to_string
 from django.core.mail import send_mail
 from django.conf import settings
 from channels.layers import get_channel_layer
-from asgiref.sync import async_to_sync
+from asgiref.sync import async_to_sync, sync_to_async
 from .models import Producto, Sucursal, CarritoCompra, ItemCarrito, Venta, AlertaStock
 from .serializers import ProductoSerializer, SucursalSerializer, CarritoSerializer, VentaSerializer
 from .grpc.clientes import listar_productos_en_sucursal, crear_producto_en_sucursal, actualizar_producto_en_sucursal
@@ -32,6 +32,7 @@ from transbank.common.options import WebpayOptions
 from transbank.common.integration_type import IntegrationType
 from django.http import QueryDict
 from decimal import Decimal, InvalidOperation
+import asyncio
 
 # Configurar Transbank
 
@@ -898,12 +899,16 @@ def webpay_return(request):
                                     )
                                 # Crear venta (con sucursal para productos remotos)
                                 Venta.objects.create(
-                                    producto=Producto.objects.get(id=1),  # Producto genérico
+                                    producto=None,
                                     cantidad=item.cantidad,
                                     precio_unitario=item.precio_unitario,
                                     total=item.subtotal,
                                     es_local=False,
-                                    sucursal_nombre=item.sucursal_nombre
+                                    sucursal_nombre=item.sucursal_nombre,
+                                    producto_id_remoto=item.producto_id_remoto,
+                                    producto_nombre_remoto=getattr(item, 'nombre_producto', ''),
+                                    producto_descripcion_remoto='',  # Puedes completar si tienes el dato
+                                    producto_categoria_remoto=''      # Puedes completar si tienes el dato
                                 )
 
                         carrito.completado = True
@@ -972,11 +977,53 @@ def verificar_stock_bajo(producto, stock_actual, sucursal_nombre=None):
     
     return False
 
-def sse_alertas_stock(request):
+async def sse_alertas_stock(request):
     """
-    Endpoint SSE temporalmente deshabilitado
+    Endpoint SSE asíncrono que emite las alertas activas en tiempo real sin bloquear el event loop
     """
-    return Response({'message': 'SSE temporalmente deshabilitado'}, status=503)
+    from productos.models import AlertaStock
+
+    from asgiref.sync import sync_to_async
+
+    async def get_alertas_dict(ultimos_ids):
+        def fetch():
+            alertas = AlertaStock.objects.filter(activa=True).order_by('-fecha_creacion')
+            alertas_dict = []
+            for alerta in alertas:
+                if alerta.id not in ultimos_ids:
+                    if alerta.producto:
+                        nombre_producto = alerta.producto.nombre
+                    else:
+                        nombre_producto = getattr(alerta, 'producto_nombre_remoto', 'Desconocido')
+                    alertas_dict.append({
+                        'id': alerta.id,
+                        'tipo': alerta.tipo,
+                        'mensaje': alerta.mensaje,
+                        'producto': nombre_producto,
+                        'sucursal': alerta.sucursal_nombre if alerta.sucursal_nombre else 'Local',
+                        'stock_actual': alerta.stock_actual,
+                        'umbral': alerta.umbral,
+                        'fecha_creacion': alerta.fecha_creacion.isoformat()
+                    })
+            return alertas_dict
+        return await sync_to_async(fetch, thread_sensitive=True)()
+
+    async def event_stream():
+        ultimos_ids = set()
+        while True:
+            nuevas_alertas = await get_alertas_dict(ultimos_ids)
+            if nuevas_alertas:
+                for alerta in nuevas_alertas:
+                    yield f"data: {alerta}\n\n"
+                    ultimos_ids.add(alerta['id'])
+            await asyncio.sleep(2)
+
+    from django.http import StreamingHttpResponse
+    async def async_streaming_response():
+        response = StreamingHttpResponse(event_stream(), content_type='text/event-stream')
+        response['Cache-Control'] = 'no-cache'
+        return response
+    return await async_streaming_response()
 
 @csrf_exempt
 def marcar_alerta_resuelta(request, alerta_id):
