@@ -135,15 +135,7 @@ class ProductoViewSet(viewsets.ModelViewSet):
                 except Exception as e:
                     errores.append(f"{sucursal.nombre}: {str(e)}")
 
-            return Response({
-                'mensaje': 'Producto creado exitosamente',
-                'producto_local_id': producto_local.id,
-                'stock_local': producto_local.stock,
-                'precio_local': producto_local.precio_base,
-                'sucursales_exitosas': sucursales_exitosas,
-                'detalles_sucursales': detalles_sucursales,
-                'errores': errores
-            })
+            return ProductoViewSet.inventario_completo(self, request)
 
         except Exception as e:
             return Response({
@@ -420,7 +412,7 @@ class ProductoViewSet(viewsets.ModelViewSet):
                 'categoria': producto.categoria,
                 'precio_base': producto.precio_base,
                 'stock': producto.stock,
-                'sucursal': None,
+                'sucursal': 'local',
                 'nombre_sucursal': 'Local',
                 'cantidad': producto.stock,
                 'es_remoto': False

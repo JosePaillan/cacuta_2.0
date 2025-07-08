@@ -97,62 +97,7 @@ let sucursales = [];
 let alertas = [];
 let eventSource = null;
 
-// Sistema de alertas SSE - TEMPORALMENTE DESHABILITADO
-// function iniciarAlertasSSE() {
-//     try {
-//         // Cerrar conexión anterior si existe
-//         if (eventSource) {
-//             eventSource.close();
-//             eventSource = null;
-//         }
-//         
-//         eventSource = new EventSource('/api/alertas/sse/');
-//         
-//         eventSource.onopen = function(event) {
-//             console.log('✅ Conexión SSE establecida');
-//         };
-//         
-//         eventSource.onmessage = function(event) {
-//             try {
-//                 const data = JSON.parse(event.data);
-//                 
-//                 // Ignorar heartbeats
-//                 if (data.type === 'heartbeat') {
-//                     return;
-//                 }
-//                 
-//                 // Procesar alertas
-//                 if (Array.isArray(data)) {
-//                     alertas = data;
-//                     actualizarPanelAlertas();
-//                     actualizarContadorAlertas();
-//                 }
-//             } catch (e) {
-//                 console.error('Error al procesar alertas:', e);
-//             }
-//         };
-//         
-//         eventSource.onerror = function(event) {
-//             console.error('Error en conexión SSE:', event);
-//             
-//             // Solo reintentar si la conexión no está cerrada
-//             if (eventSource && eventSource.readyState !== EventSource.CLOSED) {
-//                 console.log('🔄 Reintentando conexión SSE en 10 segundos...');
-//                 setTimeout(() => {
-//                     if (eventSource && eventSource.readyState !== EventSource.CLOSED) {
-//                         eventSource.close();
-//                         iniciarAlertasSSE();
-//                     }
-//                 }, 10000);
-//             }
-//         };
-//         
-//     } catch (error) {
-//         console.error('❌ Error al iniciar SSE:', error);
-//         // Reintentar después de 30 segundos
-//         setTimeout(iniciarAlertasSSE, 30000);
-//     }
-// }
+
 
 function iniciarAlertasSSE() {
     console.log('⚠️ SSE temporalmente deshabilitado');
