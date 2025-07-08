@@ -1,0 +1,15 @@
+# Entorno virtual
+env/
+
+# Archivos temporales
+__pycache__/
+*.py[cod]
+*.log
+
+# Configuración local
+.env
+
+
+# Archivos de cache de Django en las migraciones
+*/migrations/__pycache__/
+*.pyc
